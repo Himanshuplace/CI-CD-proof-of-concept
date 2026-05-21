@@ -1,0 +1,14 @@
+.git
+.gitlab
+.github
+coverage.out
+*.test
+tmp/
+dist/
+build/
+.env
+.env.*
+*.pem
+*.key
+node_modules/
+

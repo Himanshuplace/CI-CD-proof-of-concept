@@ -1,0 +1,12 @@
+replicaCount: 1
+
+env:
+  LOG_LEVEL: debug
+  DEBUG: "true"
+
+autoscaling:
+  enabled: false
+
+pdb:
+  enabled: false
+

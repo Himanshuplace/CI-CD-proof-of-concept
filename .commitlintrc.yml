@@ -1,0 +1,39 @@
+extends:
+  - '@commitlint/config-conventional'
+
+rules:
+  type-enum:
+    - 2
+    - always
+    - [feat, fix, chore, refactor, test, perf, ci, docs, build, revert]
+  scope-enum:
+    - 2
+    - always
+    - [
+        nsdl,
+        cdsl,
+        broker,
+        auth,
+        payment,
+        nats,
+        redis,
+        ws,
+        deps,
+        docker,
+        api,
+        ci,
+        helm,
+        gitops,
+        vault,
+        observability,
+        root
+      ]
+  subject-max-length:
+    - 2
+    - always
+    - 72
+  subject-full-stop:
+    - 2
+    - never
+    - '.'
+

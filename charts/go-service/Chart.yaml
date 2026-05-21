@@ -1,0 +1,7 @@
+apiVersion: v2
+name: go-service
+description: Standard Helm chart for GNexLayer Go microservices
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+

@@ -1,0 +1,27 @@
+# Default: senior/backend lead reviews everything not matched below.
+*                                      @gnexlayer/senior-engineers
+
+# CI/CD and deployment are production-control paths.
+.gitlab-ci.yml                         @gnexlayer/platform-team @gnexlayer/senior-engineers
+ci-templates/                           @gnexlayer/platform-team
+charts/                                 @gnexlayer/platform-team
+gitops/                                 @gnexlayer/platform-team
+**/Dockerfile                           @gnexlayer/platform-team
+
+# Secrets and config ownership.
+**/vault/**                             @gnexlayer/platform-team @gnexlayer/security-team
+**/external-secrets*.yaml               @gnexlayer/platform-team @gnexlayer/security-team
+
+# Financial and external-facing domains.
+**/payment/**                           @gnexlayer/payments-team @gnexlayer/security-team
+**/auth/**                              @gnexlayer/auth-team @gnexlayer/security-team
+**/middleware/**                        @gnexlayer/auth-team
+**/nsdl/**                              @gnexlayer/depository-team
+**/cdsl/**                              @gnexlayer/depository-team
+**/depository/**                        @gnexlayer/depository-team
+
+# Supply chain sensitive files.
+**/go.mod                               @gnexlayer/senior-engineers
+**/go.sum                               @gnexlayer/senior-engineers
+renovate.json                           @gnexlayer/platform-team
+

@@ -1,0 +1,12 @@
+include:
+  - project: 'gnexlayer/ci-templates'
+    ref: main
+    file: '/templates/go-service.yml'
+
+variables:
+  SERVICE_NAME: "replace-with-service-name"
+  GO_VERSION: "1.22"
+  COVERAGE_THRESHOLD: "80"
+  DOCKERFILE_PATH: "Dockerfile"
+  GITOPS_SERVICE_PATH: "services/replace-with-service-name"
+

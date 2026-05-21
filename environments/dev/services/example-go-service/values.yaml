@@ -1,0 +1,18 @@
+nameOverride: example-go-service
+
+image:
+  repository: registry.gitlab.com/gnexlayer/example-go-service/example-go-service
+  tag: dev
+
+replicaCount: 1
+
+env:
+  LOG_LEVEL: debug
+  DEBUG: "true"
+
+autoscaling:
+  enabled: false
+
+pdb:
+  enabled: false
+

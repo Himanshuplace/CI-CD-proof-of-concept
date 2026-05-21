@@ -1,0 +1,16 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: example-go-service
+  namespace: staging
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+  target:
+    name: example-go-service
+    creationPolicy: Owner
+  dataFrom:
+    - extract:
+        key: gnexlayer/staging/example-go-service

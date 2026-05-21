@@ -1,0 +1,16 @@
+replicaCount: 3
+
+env:
+  LOG_LEVEL: warn
+  DEBUG: "false"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 65
+
+pdb:
+  enabled: true
+  minAvailable: 2
+

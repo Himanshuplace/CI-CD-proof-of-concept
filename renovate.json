@@ -1,0 +1,32 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "all non-major dependencies",
+      "schedule": ["every monday before 10am"]
+    },
+    {
+      "matchDatasources": ["go"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["go-major-update"],
+      "reviewers": ["gnexlayer/senior-engineers"]
+    },
+    {
+      "matchManagers": ["dockerfile", "gitlabci"],
+      "labels": ["container-update"],
+      "reviewers": ["gnexlayer/platform-team"]
+    },
+    {
+      "matchVulnerabilityAlerts": true,
+      "schedule": ["at any time"],
+      "labels": ["security", "urgent"],
+      "prPriority": 10
+    }
+  ],
+  "platformCommit": "enabled",
+  "commitMessagePrefix": "chore(deps):"
+}
+

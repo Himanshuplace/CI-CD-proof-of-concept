@@ -1,0 +1,996 @@
+
+01 — Context
+The Three Eras of DevOps
+
+The industry didn't stop at CI/CD. Teams that ship fastest are now operating in the third era — Platform Engineering with Agentic automation. Understanding where each era begins is how you know what to adopt next.
+Era 1 · 2015–2021
+DevOps
+CI/CD pipelines
+Docker containers
+Automated tests
+Git branching strategies
+Monitoring & alerts
+SSH + scripts for deploy
+Era 2 · 2021–2024
+Platform Engineering
+GitOps (ArgoCD/Flux)
+Internal Developer Platform
+DORA metrics tracking
+Feature flags everywhere
+Supply chain security (SBOM)
+Self-service environments
+Era 3 · 2024– now
+Agentic DevOps
+AI code review in CI
+Agents that open fix PRs
+AI-written test suites
+LLM-driven incident response
+Natural language infra changes
+Agents that fix their own bugs
+→
+Your current pipeline is Era 1 / early Era 2. The security scanning, Vault JWT auth, and Conventional Commits are modern Era 2 practices. The SSH + Docker Compose deployment and manual approval-only gate are Era 1. You're well-positioned to move to Era 2–3 with focused effort.
+02 — Gap Analysis
+What You Have vs What's Modern
+
+This is a clear-eyed comparison. The left column isn't wrong — it works. The right column is what the teams shipping 20+ times per day are doing.
+✕ What you have now
+✕SSH into server → docker pull → compose restart
+✕Manual human approval gate (single point of friction)
+✕Human code review only
+✕Deploy = release (same event)
+✕No dependency on drift detection
+✕No SBOM / provenance on images
+✕No DORA metrics tracking
+✕Run CI pipeline locally = impossible
+✓ Modern equivalent
+✓GitOps: git commit → ArgoCD syncs automatically, no SSH
+✓Automated canary + progressive delivery (human approves business releases, not deploys)
+✓AI reviewer (CodeRabbit) + human reviewer in series
+✓Feature flags: deploy dark, release to 1% → 10% → all
+✓ArgoCD detects infra drift and self-heals
+✓Cosign image signing + SBOM at every build
+✓DORA dashboard: deploy freq, lead time, MTTR, CFR
+✓Dagger: same pipeline runs locally and in GitLab CI
+03 — Modern Deployment
+GitOps: Replace SSH + Compose
+
+GitOps means Git is the single source of truth for what runs in production. Instead of your CI runner SSHing into a server and running commands, a controller (ArgoCD) watches a Git repo and pulls changes automatically. No push. No SSH. No secrets in your CI runner.
+🔄
+Pull-based, not push-based
+ArgoCD / Flux
+ArgoCD runs inside your cluster. It watches a "config repo" (just YAML). When it sees a new image tag, it deploys automatically. Your CI runner never touches the server — it only pushes an image to the registry and updates a YAML value.
+Eliminates SSH keys in CI entirely
+🛡️
+Drift detection & self-healing
+ArgoCD sync
+If someone SSH's into a server and changes something manually, ArgoCD detects the drift within 3 minutes and reverts it. What's in Git is what runs. No more "mystery configuration" that only exists on the server.
+Eliminates "works on staging, broken on prod" config drift
+📋
+Declarative infra in Git
+Helm / Kustomize
+Every environment (staging, prod) is described in a YAML file committed to Git. Rollback is git revert. Audit trail is your git log. Disaster recovery is git clone + argo sync.
+Rollback in 30 seconds, not 5 minutes
+⚡
+CI pipeline becomes simpler
+image-updater
+CI does: build image → push image → update image tag in config repo. That's it. Deployment is ArgoCD's job, not the pipeline's. Your pipeline YAML loses 60% of its complexity.
+Pipeline complexity drops by ~60%
+GitOps deploy job (replaces your entire SSH deploy stage)
+# Before: SSH into server, pull image, restart compose — 40 lines
+# After: update one YAML value — ArgoCD handles the rest
+
+deploy-update-config:
+  stage: deploy
+  image: alpine/git:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    # Clone the GitOps config repo
+    - git clone https://deploy-bot:$DEPLOY_TOKEN@gitlab.com/greeksoft/gnexlayer-config.git
+    - cd gnexlayer-config
+
+    # Update the image tag — ArgoCD picks this up automatically
+    - |
+      sed -i "s|image: .*paymentcraft:.*|image: ${IMAGE_NAME}:${IMAGE_TAG}|" \
+        environments/staging/paymentcraft/deployment.yaml
+    
+    - git config user.email "ci@greeksoft.in"
+    - git commit -am "chore(deploy): paymentcraft → $CI_COMMIT_SHORT_SHA [skip ci]"
+    - git push
+    # ArgoCD syncs within 3 minutes. Done. No SSH. No secrets.
+⚠
+GitOps requires Kubernetes or a k3s equivalent. If you're on bare EC2 with Docker Compose, the pragmatic step is to add k3s (single-node, 512MB RAM overhead) and install ArgoCD on top. Full Kubernetes is overkill for 10 people — k3s is the right entry point.
+04 — Progressive Delivery
+Feature Flags — Decouple Deploy from Release
+
+The biggest shift in modern deployment thinking: a deploy is not a release. You can ship code to 100% of your infrastructure and only expose it to 1% of users. This eliminates the "big scary deploy" and makes rollbacks instant — it's just a flag toggle.
+🚦
+Dark launch to production
+Flagsmith (open source)
+Your new NSDL mandate flow ships to prod, but flag is OFF. You turn it on for internal users first. Then 10% of brokers. Then all. Zero-risk rollout. If something breaks, toggle the flag — no redeployment needed.
+Reduces production incidents by ~40%
+🏢
+Tenant-level rollout
+Multi-tenant flags
+Perfect for GNexLayer's multi-tenant architecture. Enable new eDIS flow for broker A only. Broker B stays on old flow. When broker A confirms it's working, enable for the next broker. Gradual, controlled, safe.
+Per-broker feature rollout without code changes
+🔁
+Instant rollback
+Flag toggle
+Something broke in the new CDSL pledge flow? Toggle the flag off in the Flagsmith dashboard. Takes 3 seconds. No pipeline run, no docker pull, no SSH. Users on the old code path instantly. Pipeline rollback is now a last resort, not the first.
+MTTR drops from 15 minutes to 30 seconds
+📦
+Merge incomplete features safely
+Flagsmith + trunk-based
+Feature is 60% done but branch is 5 days old? Wrap it in a flag and merge. Flag is OFF in prod. You avoid a massive merge conflict later. The rest of the team can review the code even though it's not live. This is how trunk-based development works at scale.
+Eliminates long-lived feature branches entirely
+Go — Flagsmith integration (6 lines)
+// main.go — initialise once at startup
+flagsmithClient := flagsmith.NewClient(os.Getenv("FLAGSMITH_API_KEY"))
+
+// handler.go — check per-broker tenant
+flags, _ := flagsmithClient.GetIdentityFlags(ctx, brokerID, nil)
+
+if flags.IsFeatureEnabled("nsdl_new_mandate_flow") {
+    // new flow — being rolled out gradually
+    return h.mandateV2.Initiate(ctx, req)
+}
+
+// old flow — still running for all other brokers
+return h.mandateV1.Initiate(ctx, req)
+05 — Supply Chain Security
+SBOM, Signing & Provenance
+
+In 2024, supply chain attacks (SolarWinds-style) became the dominant threat vector. The modern response is verifiable provenance: every image is signed with a private key, every image ships with a Software Bill of Materials (SBOM), and every build has cryptographic attestation of what went into it.
+🔑
+Image signing with Cosign
+Sigstore / Cosign
+Every Docker image you build is signed with a cryptographic key. Before ArgoCD deploys an image, it verifies the signature. An attacker who compromises your registry cannot deploy a modified image — it won't verify.
+Prevents registry-compromise attacks
+📄
+SBOM generation
+Syft + SPDX/CycloneDX
+A Software Bill of Materials lists every library in your image. When a new CVE drops (like log4j), you query your SBOM database: "which of our 10 services use this library?" Answer in 3 seconds, not 3 hours of manual checking.
+CVE impact assessment: 3 seconds, not 3 hours
+🏷️
+SLSA provenance
+SLSA Level 2
+A signed attestation that says "this image was built by this exact pipeline, from this exact commit, with these exact inputs." Auditors and compliance teams can verify that nothing was injected between source and production.
+Compliance + audit evidence, automatically generated
+🚫
+Policy enforcement
+OPA / Kyverno
+Kubernetes admission controller that rejects any pod that's pulling an unsigned image, or running as root, or pulling from a registry that's not yours. Enforced at the cluster level — no individual check needed per service.
+Security policy-as-code, enforced cluster-wide
+Add to your build-image CI job
+# After: docker push "${IMAGE_NAME}:${IMAGE_TAG}"
+
+# 1. Sign the image (keyless via Sigstore OIDC — no key management needed)
+- cosign sign --yes "${IMAGE_NAME}:${IMAGE_TAG}"
+
+# 2. Generate SBOM and attach it to the image
+- syft "${IMAGE_NAME}:${IMAGE_TAG}" -o spdx-json > sbom.spdx.json
+- cosign attach sbom --sbom sbom.spdx.json "${IMAGE_NAME}:${IMAGE_TAG}"
+
+# 3. Attest provenance (who built it, when, from what commit)
+- cosign attest --yes --predicate sbom.spdx.json "${IMAGE_NAME}:${IMAGE_TAG}"
+
+# Verification (in ArgoCD or admission webhook):
+# cosign verify --certificate-identity ... "${IMAGE_NAME}:${IMAGE_TAG}"
+06 — Measurement
+DORA Metrics — The Four Numbers That Matter
+
+Google's DevOps Research and Assessment team identified four metrics that predict software delivery performance and organisational performance. If you can't measure these, you can't improve deliberately. Elite teams track all four in a dashboard updated in real-time.
+Deployment Frequency
+How often you successfully deploy to production. The number one indicator of team agility and technical health.
+Elite: multiple/day High: once/day Medium: weekly Low: monthly
+Lead Time for Changes
+Time from commit to production. Measures how fast feedback loops are. Long lead times hide problems.
+Elite: < 1 hour High: < 1 day Medium: 1 week Low: 1 month+
+Change Failure Rate
+% of deployments that cause a production incident requiring hotfix or rollback. Measures quality of your pipeline gates.
+Elite: 0–5% High: 5–10% Medium: 10–15% Low: 15–30%
+Mean Time to Restore (MTTR)
+How fast you recover from production incidents. Measures your detection speed, rollback tooling, and on-call process quality.
+Elite: < 1 hour High: < 1 day Medium: < 1 week Low: > 1 week
+Automate DORA tracking — add to your pipeline
+# After prod deploy completes — push a deployment event to your tracker
+# Options: LinearB, Sleuth, or your own Postgres table
+
+track-dora:
+  stage: monitor
+  image: alpine:3.19
+  needs: [deploy-production]
+  script:
+    - apk add --no-cache curl
+    - |
+      # Post to your Postgres metrics table via a webhook or direct insert
+      curl -sf -X POST "$DORA_WEBHOOK_URL" \
+        -H 'Content-Type: application/json' \
+        -d "{
+          \"event\": \"deployment\",
+          \"service\": \"$CI_PROJECT_NAME\",
+          \"commit_sha\": \"$CI_COMMIT_SHA\",
+          \"pipeline_id\": \"$CI_PIPELINE_ID\",
+          \"deployed_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+          \"commit_created_at\": \"$CI_COMMIT_TIMESTAMP\",
+          \"environment\": \"production\"
+        }"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+07 — Agentic
+AI Code Review — What's Actually Happening Now
+
+The fastest teams in 2025-26 have an AI reviewer as the first pass on every MR. It runs before a human even looks at the code. It catches obvious bugs, flags security issues, suggests improvements, and writes the MR summary. Human reviewers then focus on architecture and domain logic — the things AI still misses.
+🤖
+CodeRabbit — AI-first MR review
+CodeRabbit / GitLab native
+Integrates with GitLab. On every MR, it posts a review within 2 minutes: walks every changed file, catches bugs, flags security smells, suggests refactors, and posts a plain-English summary of what the MR does. Human reviewer sees this before they even open the diff.
+Reduces human review time by ~30-40%
+📝
+Auto-generated MR descriptions
+GitLab AI / Claude API
+Developers hate writing MR descriptions. An AI reads the diff and writes the description for them — what changed, why, how to test it. Developer reviews and edits if needed. Saves 5-10 minutes per MR, and descriptions are actually complete.
+Every MR has a proper description. Always.
+🔧
+AI opens fix PRs for CVEs
+Renovate + AI
+When Trivy finds a CVE, an AI agent doesn't just report it — it opens a fix MR. Renovate already does dependency bumps; the next step is AI agents that can do more complex fixes: update code that uses a deprecated API, migrate to a safer library, etc.
+Zero-touch security patching for dep bumps
+🧪
+AI-generated test coverage
+Claude Code / Copilot
+When a developer adds a new function without a test, an AI agent (Claude Code, GitHub Copilot Workspace) generates the test file and opens a follow-up MR. Or it runs inline during development, suggesting tests as the developer writes code.
+Coverage threshold failures drop significantly
+◆
+What AI reviewers catch well: null pointer risks, missing error checks, SQL injection patterns, hardcoded values, inconsistent naming, missing context propagation, unbounded goroutines. What they still miss: domain logic correctness ("does this match the NSDL mandate spec?"), architectural decisions, and subtle concurrency bugs at system scale. Human reviewers focus on those.
+08 — Agentic CI
+Claude Code Inside Your Pipeline
+
+The newest frontier: running an AI agent as a pipeline job. It doesn't just analyse — it can act. Fix a failing test, rewrite a function, open a follow-up MR. This is what "agentic CI" means. It's in production use at companies like Vercel and Linear today.
+AI code reviewer — GitLab CI job (Claude API)
+# Runs on every MR. Posts a review comment before any human looks at the code.
+ai-review:
+  stage: validate
+  image: python:3.12-slim
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  before_script:
+    - pip install anthropic python-gitlab --quiet
+  script:
+    - |
+      python3 << 'EOF'
+      import anthropic, gitlab, os, subprocess
+
+      # Get the diff for this MR
+      diff = subprocess.check_output([
+          "git", "diff", os.environ["CI_MERGE_REQUEST_DIFF_BASE_SHA"], "HEAD"
+      ]).decode("utf-8")[:50000]  # cap at 50k chars
+
+      client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+      review = client.messages.create(
+          model="claude-sonnet-4-20250514",
+          max_tokens=2000,
+          system="""You are a senior Go engineer reviewing code for a financial
+      platform (GNexLayer — depository services, NSDL/CDSL, multi-tenant).
+      Be specific. Flag bugs, security risks, missing error handling, and Go
+      anti-patterns. Note what's good too. Be concise. Use markdown.""",
+          messages=[{"role": "user", "content": f"Review this diff:\n\n{diff}"}]
+      )
+
+      # Post as a GitLab MR comment
+      gl = gitlab.Gitlab("https://gitlab.com", private_token=os.environ["GITLAB_TOKEN"])
+      project = gl.projects.get(os.environ["CI_PROJECT_ID"])
+      mr = project.mergerequests.get(os.environ["CI_MERGE_REQUEST_IID"])
+      mr.notes.create({"body": f"## 🤖 AI Code Review\n\n{review.content[0].text}"})
+
+      print("AI review posted to MR")
+      EOF
+  allow_failure: true  # AI review is advisory, not blocking
+Agentic security fixer — Claude Code in pipeline (advanced)
+# When gosec finds HIGH severity issues, Claude Code automatically fixes them
+# and opens a follow-up MR. This is the agentic frontier.
+
+ai-security-fix:
+  stage: security
+  image: node:20-alpine
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: on_failure  # only runs when sast-gosec fails
+  script:
+    - npm install -g @anthropic-ai/claude-code
+    # Claude Code reads gosec-report.json, fixes the issues, and opens an MR
+    - claude --allowedTools "Edit,Write,Bash" \
+        "Read gosec-report.json. Fix every HIGH severity finding in the Go code. 
+        Commit with message 'fix(security): address gosec HIGH findings'. 
+        Push to branch fix/GNEX-auto-security-$(date +%s) and open an MR."
+09 — Local = CI
+Dagger.io — Write Pipelines in Go
+
+"It works on my machine but fails in CI" is one of the most wasted hours in software development. Dagger solves this by letting you write your CI pipeline in Go (or Python/TypeScript), running it in a container that behaves identically locally and in GitLab. The pipeline IS the code.
+ci/main.go — Dagger pipeline (runs identically locally and in GitLab)
+// Run locally: dagger run go run ./ci
+// Run in GitLab: same command in .gitlab-ci.yml
+// No YAML indentation debugging. Type-safe. Testable.
+
+package main
+
+import (
+    "context"
+    "dagger.io/dagger"
+)
+
+func main() {
+    ctx := context.Background()
+    client, _ := dagger.Connect(ctx)
+    defer client.Close()
+
+    src := client.Host().Directory(".")
+
+    goBase := client.Container().
+        From("golang:1.22-alpine").
+        WithMountedDirectory("/app", src).
+        WithWorkdir("/app").
+        WithMountedCache("/root/go/pkg/mod", client.CacheVolume("go-mod")).
+        WithMountedCache("/root/.cache/go-build", client.CacheVolume("go-build"))
+
+    // Lint
+    _, _ = goBase.WithExec([]string{"go", "vet", "./..."}).Sync(ctx)
+
+    // Test with real Postgres and Redis
+    postgres := client.Container().From("postgres:16-alpine").
+        WithEnvVariable("POSTGRES_PASSWORD", "test")
+
+    _, _ = goBase.
+        WithServiceBinding("postgres", postgres.AsService()).
+        WithEnvVariable("DATABASE_URL", "postgres://postgres:test@postgres/test").
+        WithExec([]string{"go", "test", "-tags=integration", "./..."}).
+        Sync(ctx)
+
+    // Build
+    _, _ = goBase.
+        WithExec([]string{"go", "build", "-o", "/app/service", "./cmd/server"}).
+        Sync(ctx)
+}
+→
+The killer feature: a new developer joins the team. They clone the repo, run dagger run go run ./ci, and the full pipeline runs locally — lint, tests with real Postgres, build. No "ask the senior dev why CI is failing for me" on day one. The feedback loop goes from 8 minutes (push → wait for CI) to 45 seconds (local).
+10 — What to Do Next
+Prioritised Modernisation Roadmap
+
+Not everything at once. This is the order that gives you maximum ROI with minimum disruption. Each phase builds on the last and is independently valuable.
+1
+AI Code Review + DORA baseline
+Do this week
+Add the ai-review CI job (the Python/Claude script above). Set allow_failure: true — it's advisory, not blocking. Simultaneously, start logging deployments to a simple Postgres table so you have a DORA baseline to measure future improvements against. These two changes cost a few hours and immediately improve team visibility.
+
+CodeRabbit free tier Claude API DORA webhook
+2
+Feature Flags + SBOM signing
+Month 1–2
+Stand up Flagsmith (self-hosted, open source, fits your stack). Wrap the next two new features in flags. This is the single most impactful change for reducing deploy risk. At the same time, add cosign sign and syft SBOM generation to your build stage — 10 extra lines, zero operational cost.
+
+Flagsmith self-hosted Cosign keyless Syft SBOM
+3
+GitOps with k3s + ArgoCD
+Month 2–4
+Replace SSH + Docker Compose with k3s on your EC2 instances + ArgoCD. Create a gnexlayer-config repo with Helm charts or Kustomize manifests for each environment. Pipeline deploy stage becomes a 5-line image tag update. ArgoCD handles the rest. This is the biggest architectural change but also the biggest reliability gain.
+
+k3s ArgoCD Helm charts
+4
+Dagger pipelines + Agentic CI
+Month 4–6
+Rewrite your CI pipeline in Dagger (Go). The existing .gitlab-ci.yml becomes a thin wrapper that calls dagger run go run ./ci. Developers run the exact same pipeline locally. When you're comfortable with Dagger, layer in the agentic security fixer — Claude Code that opens fix MRs when gosec fails.
+
+Dagger.io Claude Code agent AI test gen
+◆
+The single most important thing to do first is not technology — it's DORA metrics. You can't improve what you can't measure. Once you have a baseline of your deploy frequency and lead time, every other change has a measurable impact. That's how you make the case for each phase to leadership.
+
+
+
+
+
+Complete CI/CD learning guide covering pipeline anatomy, security, testing strategy, deployment patterns, best practices checklist, and tools ecosystem.
+CI/CD complete guide
+Everything you need to know — from first principles to production-grade security.
+Click any stage to see what it does and what can go wrong.
+📂SourceTrigger
+→
+🔨BuildCompile
+→
+🧪TestValidate
+→
+🛡️SecuritySAST/SCA
+→
+📦ArtifactPackage
+→
+🔬StagingPre-prod
+→
+✅ApproveGate
+→
+🚀DeployProduction
+→
+📊MonitorObserve
+← Select a stage above
+Key pipeline principles
+⚡ Fail fast
+
+    Run cheapest checks first (lint, unit tests)
+    Expensive tests only after cheap ones pass
+    Parallelise independent stages
+    Give devs feedback in under 5 minutes
+
+🔁 Idempotency
+
+    Running a pipeline twice must be safe
+    Deployments should be repeatable
+    No side effects from re-runs
+    Avoid global state mutations
+
+📦 Artifact once
+
+    Build once, promote the same artifact
+    Never rebuild per environment
+    Config injection via env vars, not builds
+    Immutable artifacts with SHA digests
+
+📝 Pipeline as code
+
+    YAML/code lives alongside application code
+    Version controlled and reviewed in PRs
+    No clickops in the CI UI
+    Templatized & reusable across repos
+
+Branch & trigger strategy
+🌿 Trunk-based dev
+
+    All devs merge to main frequently
+    Short-lived feature branches (< 1 day)
+    Feature flags for incomplete work
+    CI runs on every push to main
+    Gold standard for fast delivery
+
+🌊 GitFlow (heavier)
+
+    develop → release → main branches
+    Long-lived feature branches (days/weeks)
+    More merge conflicts, slower integration
+    Useful when releases are versioned/batched
+    Avoid for web services
+
+-------------------------------------------------------------------------------------------------
+
+
+// 01 — Strategy
+Trunk-Based Development
+
+For a 10-person team on 10+ microservices, Trunk-Based Development is the correct strategy. GitFlow is designed for large teams shipping infrequent, scheduled releases — it creates merge hell, long-lived branches, and a false sense of isolation. TBD keeps your main branch always deployable and deployments a non-event.
+✕
+GitFlow for your context is wrong. develop → release → main with separate merge queues is overhead for 10 people. It delays integration, hides conflicts, and makes every release a ceremony.
+✓
+Trunk-Based: one protected main branch. All work flows in as short-lived feature branches via MRs. Main is always shippable. Deployments are triggered by tags, not branch merges to a "release" branch.
+The Three Core Rules
+Short branches Feature branches live for ≤ 2 days. If a feature is bigger, use a feature flag and merge an incomplete-but-safe version.
+Main = deployable Every commit on main must be deployable to production. If it's not, the MR should not be merged.
+CI gate always Nothing merges to main without a green pipeline. No exceptions — not even "just a typo fix".
+// 02 — Branches
+Branch Naming Convention
+
+Consistent branch names are machine-readable. Your CI pipeline, GitLab labels, and automation scripts can all parse them. Make it a hard rule — enforced by a GitLab push rule (regex).
+Convention
+{type}/{ticket-id}-{short-kebab-description}
+
+# Examples
+feature/GNEX-123-nsdl-edis-mandate-flow
+fix/GNEX-456-nats-reconnect-on-timeout
+hotfix/GNEX-789-nil-pointer-payment-handler
+chore/GNEX-012-upgrade-go-1-22
+refactor/GNEX-345-extract-jwt-middleware
+docs/GNEX-678-broker-api-spec
+Type	When to use	Lifetime	Target
+feature/	New functionality, any size	< 2 days	main
+fix/	Bug fix found in development or staging	< 1 day	main
+hotfix/	Production incident — needs immediate deployment	Hours	main → tag
+chore/	Dependency bumps, config, tooling changes	< 1 day	main
+refactor/	Internal restructure, no behaviour change	< 2 days	main
+docs/	Documentation-only changes	Hours	main
+GitLab Push Rule — Enforce Naming
+
+Go to Settings → Repository → Push Rules and add this regex. Branches that don't match are rejected at push time.
+Regex — Branch Name Validation
+# Settings → Repository → Push Rules → Branch name
+^(main|feature|fix|hotfix|chore|refactor|docs)\/[A-Z]+-[0-9]+-[a-z0-9-]+$
+ℹ
+The ticket ID (e.g. GNEX-123) is mandatory in the branch name. This gives GitLab the ability to auto-link branches to issues, and gives your team traceability from code → ticket → discussion.
+// 03 — Commits
+Conventional Commits
+
+Conventional Commits is a lightweight convention on top of commit messages. It makes your git history machine-readable — enabling automated changelogs, semantic version bumping, and release notes generation.
+Format
+<type>(<scope>): <short description>  # ← max 72 chars
+
+# Optional body (after blank line)
+Longer explanation of what changed and why.
+Not how — the code shows how.
+
+# Optional footer
+Closes: #GNEX-123
+Breaking-Change: old broker API removed
+Real examples for GNexLayer
+feat(nsdl): add eDIS mandate initiation flow
+feat(cdsl): implement pledge creation endpoint
+feat(broker): add per-tenant rate limiting via Redis
+feat(ws): enable permessage-deflate compression for market data
+
+fix(nats): reconnect after JetStream stream timeout
+fix(auth): JWT expiry not checked in middleware
+fix(payment): nil pointer in transaction rollback handler
+
+chore(deps): bump golang.org/x/crypto to v0.21.0
+chore(docker): update base image to golang:1.22-alpine
+
+refactor(depository): extract CDSL/NSDL adapter interface
+test(cdsl): add integration test for pledge cancellation
+perf(redis): use pipeline for batch session operations
+ci(pipeline): add Trivy container scan stage
+docs(api): document broker registration endpoint
+Type	What it means	Triggers
+feat	New feature or capability	minor version bump
+fix	Bug fix	patch version bump
+chore	Maintenance — deps, config, tooling	no version bump
+refactor	Code change — no behaviour change	no version bump
+test	Adding or fixing tests	no version bump
+perf	Performance improvement	patch version bump
+ci	Pipeline / CI changes	no version bump
+docs	Documentation only	no version bump
+BREAKING CHANGE	Incompatible API change (footer)	major version bump
+Enforce via commitlint (in CI)
+.commitlintrc.yml
+extends:
+  - '@commitlint/config-conventional'
+
+rules:
+  type-enum:
+    - 2
+    - always
+    - [feat, fix, chore, refactor, test, perf, ci, docs]
+  scope-enum:
+    - 2
+    - always
+    - [nsdl, cdsl, broker, auth, payment, nats, redis, ws, deps, docker, api, ci]
+  subject-max-length:
+    - 2
+    - always
+    - 72
+// 04 — Merge Requests
+Merge Request Rules
+
+The MR is where quality is enforced. A well-structured MR process prevents bugs from reaching main, keeps reviews fast, and creates an audit trail for every change.
+⚡ Speed rules
+MR must be reviewed within 4 working hours. If a reviewer can't, they re-assign. Stale MRs block the team.
+📏 Size rules
+Soft limit: 400 lines changed. Larger MRs take 4× longer to review and miss 50% of bugs. Split the work.
+👥 Approvals
+Regular changes: 1 approver. Security / infra / Vault / CI changes: 2 approvers. CODEOWNERS handles auto-assignment.
+🔒 Merge rules
+Always squash merge. Always delete source branch. Pipeline must be green. No force-push on main — ever.
+MR Template — Drop into .gitlab/merge_request_templates/Default.md
+.gitlab/merge_request_templates/Default.md
+## What does this MR do?
+<!-- 2-3 sentences. What changed and why. Link the ticket. -->
+
+Closes: #GNEX-
+
+## Type of change
+- [ ] feat — new functionality
+- [ ] fix — bug fix
+- [ ] refactor — no behaviour change
+- [ ] chore — maintenance
+- [ ] hotfix — production incident
+
+## How to test
+<!-- Steps to manually verify this works. -->
+1. 
+2. 
+
+## Pre-merge checklist
+- [ ] Unit tests added / updated
+- [ ] Integration tests pass locally (go test -tags=integration)
+- [ ] No secrets or credentials committed
+- [ ] No debug logs left in code
+- [ ] API contract unchanged OR documented breaking change
+- [ ] Vault/Consul config updated if needed
+- [ ] NATS subject naming follows the convention
+- [ ] Reviewed by at least 1 team member
+
+## Screenshots / logs (if applicable)
+CODEOWNERS — Auto-assign reviewers by path
+CODEOWNERS
+# CODEOWNERS — place in repo root or .gitlab/
+# Format: [path/pattern]  @gitlab-username  @another-user
+
+# Default: all changes need approval from tech lead
+*                                    @tech-lead
+
+# CI/CD changes — 2 approvers always
+.gitlab-ci.yml                       @tech-lead @devops-lead
+Dockerfile                           @tech-lead @devops-lead
+docker-compose*.yml                  @tech-lead @devops-lead
+
+# Vault / secrets config — highest sensitivity
+**/vault/**                          @tech-lead @devops-lead
+**/consul/**                         @tech-lead @devops-lead
+
+# Depository adapters — domain experts review
+**/nsdl/**                           @nsdl-owner
+**/cdsl/**                           @cdsl-owner
+**/depository/**                     @depository-lead
+
+# Payment flows — always 2 reviewers
+**/payment/**                        @payment-lead @tech-lead
+
+# Auth and middleware
+**/middleware/**                     @auth-lead
+**/auth/**                           @auth-lead
+⚠
+CODEOWNERS must be enabled in GitLab. Go to Settings → General → Merge Requests → Enable "Code Owners" and set "Require Code Owner approval". Without this, the file exists but isn't enforced.
+// 05 — Environment Promotion
+Dev → Staging → Production
+
+Code flows in one direction: left to right. Nothing skips staging. Production is only reachable via a Git tag, never directly by branch push. This is non-negotiable.
+feature/GNEX-xxx
+→
+MR + review
+pipeline green
+→
+main
+→
+auto deploy
+→
+staging
+→
+smoke test
++ manual gate
+→
+production
+What triggers what
+Trigger	What happens	Automatic?
+Push to feature branch	lint + test + security (no deploy)	auto
+Merge to main	Full pipeline → build image → staging deploy → smoke test	auto
+Staging smoke passes	Pipeline pauses at "approve-production" — waits for human	manual gate
+Human clicks ▶ approve	Production deploy runs → post-deploy smoke → rollback available	manual approve
+Tag v*.*.* created	Same pipeline, but version label injected into the image	auto
+✕
+Never deploy to production from a feature branch. Never skip staging. Never SSH into a server and manually run docker pull. Every production deploy must be traceable to a commit SHA on main, approved in GitLab, logged in the environment history.
+Environment isolation rules
+Separate Vault paths
+secret/gnexlayer/staging/*
+and
+secret/gnexlayer/prod/*
+— never shared.
+Separate databases Staging and production databases are completely separate. No shared RDS instance with a different database name.
+Separate NATS accounts Different NATS accounts or clusters for staging vs prod. Subject namespacing alone is not sufficient isolation.
+Never share secrets Production credentials must never appear in staging config. Vault roles are bound by environment.
+// 06 — Incidents
+Hotfix Protocol
+
+A production incident is not the time to invent a process. This is the exact sequence to follow when production is broken and you need to fix it in under an hour.
+1
+Branch from main immediately
+git checkout main && git pull && git checkout -b hotfix/GNEX-789-nil-pointer-payment
+Never branch from a feature branch. Never branch from a stale local main.
+2
+Fix only the incident — nothing else
+Hotfix branches are for surgical fixes. Do not refactor, do not clean up nearby code, do not "fix that other thing while you're in here". Every line must be justifiable.
+3
+Open an MR — fast-track review
+Mark it as Hotfix in the MR template. Ping the reviewer directly in Slack. Target 1 reviewer, 15-minute review time. Do not skip the MR — it's your audit trail.
+4
+Merge to main — pipeline runs
+Full pipeline still runs. Tests don't get skipped because it's urgent — that's exactly when you need them most.
+5
+Create a patch tag immediately
+git tag v1.4.1 && git push origin v1.4.1 — tag triggers the production pipeline. Approve and deploy.
+6
+Write an incident post-mortem within 24h
+Add a GitLab issue: what happened, root cause, how it was detected, how it was fixed, what prevents recurrence. No blame — only learning.
+// 07 — Releases
+Release & Versioning
+
+Semantic versioning (MAJOR.MINOR.PATCH) combined with Conventional Commits gives you automated, predictable releases. The version number tells consumers exactly what changed.
+MAJOR (1.0.0 → 2.0.0)
+Breaking API change. Client must update. Requires a BREAKING CHANGE: footer in a commit.
+MINOR (1.3.0 → 1.4.0)
+New feature, backward-compatible. Any feat: commit without a breaking change.
+PATCH (1.4.0 → 1.4.1)
+Bug fix, hotfix, performance improvement. fix: or perf: commits.
+Automated Release with release-please
+
+release-please reads your Conventional Commits, determines the correct version bump, and opens a "Release PR" automatically. You merge it when ready — no manual tagging.
+.gitlab-ci.yml — release-please job (add to your pipeline)
+# Add this job to your existing pipeline
+release-please:
+  stage: .pre
+  image: node:20-alpine
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  before_script:
+    - npm install -g release-please
+  script:
+    - |
+      release-please github-release \
+        --token $GITLAB_TOKEN \
+        --repo-url $CI_PROJECT_URL \
+        --release-type go \
+        --package-name gnexlayer-service
+Manual tagging (if not using release-please)
+Shell
+# Always tag from main, never from a feature branch
+git checkout main && git pull
+
+# Tag with annotation — message is required
+git tag -a v1.4.0 -m "feat: NSDL mandate flow, CDSL pledge improvements"
+
+# Push tag — this triggers the production pipeline
+git push origin v1.4.0
+
+# Never: git push origin --tags  (pushes ALL local tags indiscriminately)
+// 08 — GitLab Configuration
+Branch Protection & Project Settings
+
+These settings are what actually enforce the rules above. Without them, everything is a gentleman's agreement. Configure these once per repo — or better, via a group-level policy that applies to all 10+ service repos.
+Settings → Repository → Protected Branches
+Setting	Value	Why
+Allowed to push	No one	Forces all changes through MR. Even tech lead can't push directly.
+Allowed to force push	Disabled	Force-push rewrites history. Never on main. Not even once.
+Allowed to merge	Maintainers	Developers open MRs; only Maintainers can click Merge.
+Code owner approval	Required	Enforces CODEOWNERS rules for sensitive paths.
+Pipelines must succeed	Required	Green CI is non-negotiable before merge.
+Settings → General → Merge Requests
+GitLab Project Settings (configure manually or via API)
+# Settings → General → Merge Requests
+Merge method:              Squash commits
+Squash commits:            Require           # not "Allow" — Require
+Delete source branch:      Enabled by default
+Merge trains:              Enabled           # queue MRs, run pipelines in order
+Auto-merge:                Enabled           # merge automatically when pipeline passes
+Pipelines must succeed:    Required
+All discussions resolved:  Required          # no open threads before merge
+
+# Settings → General → Merge Request Approvals
+Required approvals:        1
+Reset approvals on push:   Enabled           # new commit = re-approve
+Allow author self-approve: Disabled          # you cannot approve your own MR
+
+# Settings → Repository → Push Rules
+Reject unsigned commits:   optional          # recommended for audit
+Commit message regex:      ^(feat|fix|chore|refactor|test|perf|ci|docs)\(.+\): .{1,72}$
+Branch name regex:         ^(main|feature|fix|hotfix|chore|refactor|docs)\/[A-Z]+-[0-9]+-[a-z0-9-]+$
+GitLab Roles — Who can do what
+Role	Can push to main	Can merge MR	Can approve	Who gets it
+Guest	✕	✕	✕	External stakeholders, read-only
+Reporter	✕	✕	✕	QA viewing pipelines
+Developer	✕	✕	✓	All engineers (open MRs, approve others)
+Maintainer	✕ (protected)	✓	✓	Tech lead, senior engineers
+Owner	✕ (protected)	✓	✓	1-2 people max
+// 09 — Multi-Service
+10+ Services — Staying Consistent
+
+With 10+ repos, the biggest risk is divergence — each service evolving its own pipeline dialect, linting rules, and branching conventions. The solution is a shared CI templates repository that all services pull from.
+Repo Structure
+greeksoft/ci-templates          # the shared templates repo (internal)
+  templates/
+    go-service.yml               # full pipeline for any Go microservice
+    security-scan.yml            # reusable security stage
+    docker-build.yml             # reusable build stage
+  configs/
+    .golangci.yml                # shared linter config
+    .gitleaks.toml               # shared secret scan config
+    .trivyignore                 # shared CVE suppressions
+  CODEOWNERS                        # who owns the templates
+
+greeksoft/paymentcraft           # individual service repos
+greeksoft/nsdl-adapter
+greeksoft/cdsl-adapter
+greeksoft/broker-gateway
+# ... 6 more
+Each service .gitlab-ci.yml — 5 lines
+.gitlab-ci.yml (in each service repo)
+# Each service imports the shared template.
+# The entire pipeline is defined once — in ci-templates.
+# Services only override what they need to.
+
+include:
+  - project: 'greeksoft/ci-templates'
+    ref: main
+    file: '/templates/go-service.yml'
+
+# Override only what's specific to this service
+variables:
+  COVERAGE_THRESHOLD: "80"    # higher bar for payment service
+  SERVICE_NAME: "paymentcraft"
+✓
+When you update a security scanner or fix the pipeline in ci-templates, all 10 services get the update on their next pipeline run. No per-repo changes needed. This is the only sane way to manage 10+ services.
+Group-level settings (apply to all repos at once)
+
+In GitLab, set these at the Group level (greeksoft group) — they cascade to every project:
+Group runners Register CI runners at the group level — all services share them automatically.
+Group variables
+VAULT_ADDR
+,
+SSH_PRIVATE_KEY
+— set once at group level, available in all projects.
+Group-level approval rules Require 1 approval for all merge requests across the group.
+Group access tokens One bot token for release-please and Renovate Bot — not individual user tokens.
+// 10 — Automation
+Automate Everything
+
+For 10 people managing 10+ services, manual processes do not scale. These four automations eliminate entire categories of work.
+1 — Renovate Bot (dependency updates, hands-free)
+
+Renovate scans all your go.mod, Dockerfile, and CI image versions. It opens MRs automatically when updates are available. Your pipeline validates them. You merge or ignore.
+renovate.json (in ci-templates repo root — applies to all)
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices"],
+
+  // Group all minor/patch updates into one weekly MR
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "all non-major dependencies",
+      "schedule": ["every monday"]
+    },
+    {
+      // Security patches: open immediately, don't group
+      "matchDepTypes": ["vulnerabilities"],
+      "schedule": ["at any time"],
+      "groupName": null,
+      "prPriority": 10
+    },
+    {
+      // Go toolchain: separate MR, needs careful testing
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["go-major-update"],
+      "reviewers": ["tech-lead"]
+    }
+  ],
+
+  "automerge": true,
+  "automergeType": "branch",
+  "platformCommitOptions": {
+    "commitMessagePrefix": "chore(deps):"
+  }
+}
+2 — Stale MR Cleanup (GitLab scheduled pipeline)
+
+MRs older than 7 days with no activity get automatically labelled stale and the author is pinged. No manual chasing.
+scripts/stale-mr-check.sh (run via GitLab scheduled pipeline — weekly)
+#!/bin/sh
+# Finds MRs with no activity in 7 days and labels them stale
+# Run this via a GitLab scheduled pipeline — Schedules → New schedule → weekly
+
+GITLAB_URL="https://gitlab.com"
+PROJECT_ID="$CI_PROJECT_ID"
+TOKEN="$GITLAB_TOKEN"
+CUTOFF=$(date -d '7 days ago' --iso-8601=seconds 2>/dev/null || date -v-7d +%Y-%m-%dT%H:%M:%S)
+
+# Fetch all open MRs
+MRS=$(curl -sf -H "PRIVATE-TOKEN: $TOKEN" \
+  "$GITLAB_URL/api/v4/projects/$PROJECT_ID/merge_requests?state=opened&per_page=100")
+
+echo "$MRS" | python3 -c "
+import json, sys, subprocess, os
+from datetime import datetime, timezone
+
+mrs = json.load(sys.stdin)
+cutoff = os.environ.get('CUTOFF', '')
+
+for mr in mrs:
+    updated = mr.get('updated_at', '')
+    if updated < cutoff:
+        iid = mr['iid']
+        author = mr['author']['username']
+        title = mr['title']
+        print(f'STALE MR !{iid}: {title} (author: @{author})')
+        # Add stale label via API
+        subprocess.run([
+            'curl', '-sf', '-X', 'PUT',
+            '-H', f'PRIVATE-TOKEN: {os.environ[\"TOKEN\"]}',
+            '-d', 'labels=stale',
+            f'{os.environ[\"GITLAB_URL\"]}/api/v4/projects/{os.environ[\"PROJECT_ID\"]}/merge_requests/{iid}'
+        ])
+"
+3 — Branch Cleanup (auto-delete merged branches)
+
+Already handled: GitLab's "Delete source branch" default setting removes the branch the moment the MR is merged. Nothing to script — just enable the setting.
+✓
+Settings → General → Merge Requests → "Enable 'Delete source branch' option by default". This means merged branches disappear automatically. No one has to clean up, and your branch list stays clean.
+4 — Slack Deploy Notifications (already in your pipeline)
+
+Your pipeline already sends Slack notifications. Make sure these three events are covered:
+Notification events (already wired in .gitlab-ci.yml)
+✅ Production deploy healthy   — every successful prod deploy
+🔥 Production smoke FAILED     — immediately, with rollback link
+🚀 Production deploy approved  — when human clicks approve
+⏪ Production rolled back      — when rollback is triggered
+❌ Job failed (any stage)      — after_script on any failure
+5 — Commit Message Enforcement (in CI)
+Add to .gitlab-ci.yml validate stage
+commitlint:
+  stage: validate
+  image: node:20-alpine
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  before_script:
+    - npm install -g @commitlint/cli @commitlint/config-conventional
+  script:
+    # Validate every commit in this MR against the conventional commits spec
+    - npx commitlint --from $CI_MERGE_REQUEST_DIFF_BASE_SHA --to HEAD --verbose
+// 11 — Quick Reference
+Daily Cheatsheet
+
+Print this. Pin it in Slack. Every dev on the team should know these by heart.
+Daily Git Workflow
+# START a new task
+git checkout main && git pull
+git checkout -b feature/GNEX-123-your-description
+
+# COMMIT work (follow conventional commits)
+git add -p                               # stage selectively, not git add .
+git commit -m "feat(nsdl): add mandate initiation"
+
+# SYNC with main daily (avoid big merge conflicts)
+git fetch origin
+git rebase origin/main                   # NOT git merge — keeps history clean
+
+# PUSH and open MR
+git push origin feature/GNEX-123-your-description
+# → GitLab will show a link to create the MR. Fill the template.
+
+# AFTER MR is merged — clean up
+git checkout main && git pull
+git branch -d feature/GNEX-123-your-description   # should already be deleted on remote
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Things you NEVER do on main
+git push origin main                    # blocked by GitLab
+git push --force origin main            # blocked by GitLab
+git commit -m "fix"                     # fails commitlint
+git push origin v1.2.3 --tags           # use git push origin v1.2.3 only
+
+# Things you NEVER put in a commit
+*.pem, *.key, id_rsa, .env              # Gitleaks will catch it
+fmt.Println("debug")                    # debug logs
+hardcoded credentials                   # use Vault
+Scopes for this project
+nsdl      nsdl adapter
+cdsl      cdsl adapter
+broker    broker gateway
+auth      authentication
+payment   payment flows
+nats      messaging layer
+redis     cache layer
+ws        websocket / market data
+deps      dependency updates
+docker    container / image
+api       REST API layer
+ci        pipeline changes
+Types → version bump
+feat      → minor bump
+fix       → patch bump
+perf      → patch bump
+chore     → no bump
+refactor  → no bump
+test      → no bump
+ci        → no bump
+docs      → no bump
+BREAKING  → major bump
+⚠
+The three rules that prevent the most incidents: 
+(1) Never push directly to main.
+ (2) Never deploy to prod without staging smoke tests passing. 
+ (3) Always have a rollback plan before deploying — which your pipeline provides automatically.
+
+----------------------------------------------------------------------------------------------------------------------------------------------

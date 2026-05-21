@@ -1,0 +1,22 @@
+nameOverride: example-go-service
+
+image:
+  repository: registry.gitlab.com/gnexlayer/example-go-service/example-go-service
+  tag: staging
+
+replicaCount: 2
+
+env:
+  LOG_LEVEL: info
+  DEBUG: "false"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+

@@ -1,0 +1,10 @@
+include:
+  - local: "ci-templates/templates/go-service.yml"
+
+variables:
+  SERVICE_NAME: "example-go-service"
+  GO_VERSION: "1.22"
+  COVERAGE_THRESHOLD: "75"
+  DOCKERFILE_PATH: "Dockerfile"
+  GITOPS_SERVICE_PATH: "services/example-go-service"
+
