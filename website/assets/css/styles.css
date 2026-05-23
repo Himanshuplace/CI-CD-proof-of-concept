@@ -1,0 +1,117 @@
+/* ───────────────────────────────────────────────────────────────────────
+   Custom styles — things Tailwind CDN doesn't handle cleanly inline.
+   The bulk of the styling lives in utility classes on the HTML.
+   ─────────────────────────────────────────────────────────────────────── */
+
+* {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+code, pre {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+/* Subtle gradient on the page background — adds depth without distraction */
+body {
+  background: radial-gradient(
+    ellipse at top,
+    rgba(30, 41, 59, 0.4) 0%,
+    rgba(2, 6, 23, 1) 50%
+  );
+  background-attachment: fixed;
+}
+
+/* ── Sidebar nav active state ───────────────────────────────────────── */
+.nav-link.active {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: rgb(96, 165, 250);
+  border-left: 2px solid rgb(59, 130, 246);
+  padding-left: 10px;
+}
+
+/* ── Pipeline stage buttons ─────────────────────────────────────────── */
+.stage-btn {
+  transition: all 0.15s ease;
+}
+
+.stage-btn.active {
+  background-color: rgba(59, 130, 246, 0.15);
+  border-color: rgb(59, 130, 246);
+  color: rgb(96, 165, 250);
+}
+
+.stage-panel {
+  animation: fadeIn 0.25s ease;
+}
+
+.stage-panel.hidden {
+  display: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Code blocks ────────────────────────────────────────────────────── */
+pre {
+  line-height: 1.6;
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────── */
+table th,
+table td {
+  vertical-align: top;
+}
+
+/* ── SVG diagrams: ensure they scale gracefully on mobile ───────────── */
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ── Selection color ────────────────────────────────────────────────── */
+::selection {
+  background-color: rgba(59, 130, 246, 0.4);
+  color: white;
+}
+
+/* ── Scrollbar (webkit) ─────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.6);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
+}
+
+/* ── Section anchor offset (so sticky headers don't cover content) ─── */
+section[id] {
+  scroll-margin-top: 20px;
+}
+
+/* ── Print styles: optional, but nice to have ───────────────────────── */
+@media print {
+  aside { display: none; }
+  main { margin-left: 0 !important; }
+  body { background: white; color: black; }
+  .stage-panel.hidden { display: block !important; }
+}
