@@ -51,6 +51,10 @@ kind: Application
 metadata:
   name: production-example-go-service
   namespace: argocd
+  # finalizer: ArgoCD deletes the K8s resources when this Application is deleted.
+  # Without this, deleting the ArgoCD app leaves orphaned pods/services.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: gnexlayer-services
   source:
@@ -63,3 +67,18 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: production
+  # ── PRODUCTION: NO automated sync ─────────────────────────────────────────
+  # Why no automated: {} here?
+  #   In staging, ArgoCD auto-syncs every time CI pushes a new image tag.
+  #   In production, a human must click "Sync" in the ArgoCD UI (or via CLI).
+  #   This is the approval gate. It replaces the GitLab "when: manual" job
+  #   because the deploy IS ArgoCD — not the pipeline.
+  #
+  # How to deploy to production:
+  #   Option A (UI): ArgoCD dashboard → production-example-go-service → Sync
+  #   Option B (CLI): argocd app sync production-example-go-service
+  #   Option C (GitLab): add an argocd-sync CI job with `when: manual`
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground  # wait for old pods to terminate before creating new ones

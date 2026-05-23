@@ -1,41 +1,26 @@
-## What does this MR do?
+## What & why
+<!-- One paragraph: what changed, and why now. Skip if the title is self-explanatory. -->
 
-Closes: #GNEX-
 
-## Type of change
+## How tested
+<!-- One line for trivial MRs. For bigger changes: which scenarios you verified manually. -->
 
-- [ ] feat
-- [ ] fix
-- [ ] refactor
-- [ ] chore
-- [ ] hotfix
-- [ ] security-sensitive
 
-## Affected area
+## Risk
+<!-- Pick one and delete the others. The reviewer reads this first. -->
+- Low — pure refactor / docs / config
+- Medium — touches one service's behavior
+- High — touches auth, payment, depository adapters, or DB schema
 
-- [ ] nsdl
-- [ ] cdsl
-- [ ] broker
-- [ ] auth
-- [ ] payment
-- [ ] nats
-- [ ] redis
-- [ ] ws
-- [ ] ci/deploy
+## Rollback
+<!-- For Medium/High only. How would you undo this if it breaks production? -->
 
-## How to test
 
-1.
-2.
-
-## Pre-merge checklist
-
-- [ ] Unit tests added or updated
-- [ ] `go test -race ./...` passes locally
-- [ ] No secrets, credentials, private keys, or customer data in the diff
-- [ ] No debug logs left in code
-- [ ] API contract unchanged or breaking change documented
-- [ ] Metrics/logs/traces updated for production debugging
-- [ ] Feature flag added for risky user-facing behavior
-- [ ] Rollback path is clear
-
+---
+<!--
+Pre-merge — you (the author) confirmed these before requesting review:
+- tests pass locally (go test -race ./...)
+- no secrets in the diff
+- no debug logs / fmt.Println left in code
+- if it's user-facing risky behavior: there's a feature flag wrapping it
+-->

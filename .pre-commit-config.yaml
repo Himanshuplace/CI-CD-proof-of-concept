@@ -1,0 +1,76 @@
+# Pre-commit hooks — catch trivial errors LOCALLY, not in CI.
+#
+# Why this exists:
+#   At multi-deploy-per-day cadence, a pipeline failure for "gofmt didn't run"
+#   costs the team ~5 minutes (push → wait for CI → see red → fix → push again).
+#   Pre-commit catches the same thing in 1 second on your laptop.
+#
+# Setup (each developer runs this ONCE after cloning):
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually against everything:
+#   pre-commit run --all-files
+#
+# Skip hooks for a specific commit (use sparingly):
+#   git commit --no-verify
+#
+# These hooks mirror the cheapest CI checks. The expensive ones (unit tests,
+# security scans, image build) still run in CI — locally is too slow for those.
+
+repos:
+  # ── Generic file hygiene ─────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        exclude: ^charts/.*templates/    # Helm templates have non-standard YAML
+      - id: check-merge-conflict          # catches "<<<<<<< HEAD" left in files
+      - id: check-added-large-files       # blocks committing >500KB files
+        args: [--maxkb=500]
+      - id: detect-private-key            # catches PEM headers in the diff
+
+  # ── Go-specific ──────────────────────────────────────────────────────────
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: bash -c 'cd service && test -z "$(gofmt -l .)" || (echo "Run: gofmt -w ." && exit 1)'
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: go-vet
+        name: go vet
+        entry: bash -c 'cd service && go vet ./...'
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: bash -c 'cd service && go mod tidy && git diff --exit-code go.mod go.sum || (echo "go.mod or go.sum changed — stage and re-commit" && exit 1)'
+        language: system
+        types: [go]
+        pass_filenames: false
+
+  # ── Commit message format ─────────────────────────────────────────────────
+  # Validates "feat(scope): ..." conventional commit format at commit time,
+  # not just in CI. Saves you from typing a message and then having the push fail.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - --types=feat,fix,chore,refactor,test,perf,ci,docs,build,revert
+
+  # ── Secret detection ─────────────────────────────────────────────────────
+  # Same logic as the gitleaks job in CI, but runs locally.
+  # Catches accidentally committed .env, API keys, etc.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks

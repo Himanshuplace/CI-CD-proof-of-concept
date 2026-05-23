@@ -1,0 +1,9 @@
+# Exclude everything not needed for the build.
+# Smaller build context = faster docker build.
+.git
+.github
+.gitlab
+docs
+*.md
+*_test.go
+.dockerignore
