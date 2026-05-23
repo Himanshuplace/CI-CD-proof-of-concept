@@ -1,16 +1,51 @@
+# ExternalSecret — one per service per environment
+#
+# ESO watches this object and:
+#   1. Reads secrets from Vault at the path specified in dataFrom.extract.key
+#   2. Creates a Kubernetes Secret named spec.target.name in the same namespace
+#   3. Re-reads from Vault every spec.refreshInterval (1 hour here)
+#
+# The Vault path for this service:
+#   secret/data/gnexlayer/staging/example-go-service
+#
+# Set the Vault secrets with:
+#   vault kv put secret/gnexlayer/staging/example-go-service \
+#     database_url="postgres://user:pass@host/db" \
+#     redis_url="redis://:pass@host:6379"
+#
+# Result: ESO creates a Kubernetes Secret named "example-go-service"
+# in the "staging" namespace with keys: database_url, redis_url
+#
+# The pod reads these via:
+#   env:
+#     - name: DATABASE_URL
+#       valueFrom:
+#         secretKeyRef:
+#           name: example-go-service
+#           key: database_url
+
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: example-go-service
   namespace: staging
 spec:
+  # refreshInterval: how often ESO re-reads from Vault.
+  # If someone rotates the Vault secret, K8s will pick it up within this window.
+  # 1h is a good default. For dynamic DB credentials (short TTL), use "15m".
   refreshInterval: 1h
+
   secretStoreRef:
-    name: vault-backend
-    kind: ClusterSecretStore
+    name: vault-backend          # must match ClusterSecretStore.metadata.name
+    kind: ClusterSecretStore     # ClusterSecretStore = shared, SecretStore = namespace-scoped
+
   target:
-    name: example-go-service
-    creationPolicy: Owner
+    name: example-go-service     # the K8s Secret that ESO will create/update
+    creationPolicy: Owner        # ESO owns this secret; deletes it if ExternalSecret is deleted
+
   dataFrom:
+    # extract: reads ALL key/value pairs from the Vault path and maps them to the K8s Secret.
+    # Simpler than listing individual keys — any new secret added in Vault appears automatically.
+    # Alternative: use `data:` to map individual keys (more explicit, safer for sensitive paths).
     - extract:
         key: gnexlayer/staging/example-go-service

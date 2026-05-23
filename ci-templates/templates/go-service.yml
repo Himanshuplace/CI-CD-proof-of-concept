@@ -1,12 +1,12 @@
 stages:
-  - validate
-  - test
-  - security
-  - build
-  - package
-  - deploy
-  - observe
-  - agentic
+  - validate    # commitlint, branch naming, gofmt, vet, lint, secret scan
+  - test        # unit tests + coverage gate
+  - security    # gosec, govulncheck, trivy filesystem scan
+  - build       # docker image build + push
+  - package     # trivy image scan + sbom + cosign sign
+  - deploy      # update gitops repo (ArgoCD picks it up)
+  - observe     # smoke test + dora event + slack notification
+  - agentic     # ai code review (advisory only)
 
 workflow:
   rules:
@@ -53,8 +53,14 @@ branch-name:
   rules:
     - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
   script:
+    # Branch must be in the form <type>/<short-description>
+    # Examples: feature/jwt-refresh, fix/nats-reconnect, hotfix/payment-nil-ptr
+    #
+    # If you adopt Jira/Linear tickets later, add the ticket ID requirement:
+    #   ^(feature|fix|...)/[A-Z]+-[0-9]+-[a-z0-9-]+$
+    # For now, ticket IDs are optional.
     - |
-      echo "$CI_COMMIT_BRANCH" | grep -Eq '^(feature|fix|hotfix|chore|refactor|docs)/[A-Z]+-[0-9]+-[a-z0-9-]+$'
+      echo "$CI_COMMIT_BRANCH" | grep -Eq '^(feature|fix|hotfix|chore|refactor|docs)/[a-z0-9-]+$'
 
 format-vet-lint:
   stage: validate
@@ -254,11 +260,45 @@ prepare-production:
     - git commit -m "chore(deploy): ${SERVICE_NAME} production ${CI_COMMIT_TAG} [skip ci]"
     - git push
 
-track-dora:
+# ── SMOKE TEST ─────────────────────────────────────────────────────────────
+# Runs after deploy-staging. Hits the real staging URL to verify the new image
+# is serving traffic before we record a DORA deployment event.
+#
+# Why: The GitOps push (deploy-staging) only updates a YAML file. ArgoCD then
+# does the actual deploy. The smoke test waits until the service is alive.
+# Without this, a failed deploy looks like a successful pipeline.
+#
+# STAGING_URL must be set as a GitLab CI variable:
+#   e.g. https://staging.gnexlayer.internal
+smoke-test-staging:
   stage: observe
   image: alpine:3.20
   needs:
     - deploy-staging
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      echo "Waiting for ArgoCD to sync (up to 120s)..."
+      for i in $(seq 1 24); do
+        response=$(curl -sf --max-time 5 "$STAGING_URL/healthz" 2>/dev/null || true)
+        if echo "$response" | grep -q '"status":"ok"'; then
+          echo "Staging is healthy after $((i*5))s"
+          exit 0
+        fi
+        echo "  attempt $i/24 — not ready yet, waiting 5s..."
+        sleep 5
+      done
+      echo "SMOKE TEST FAILED: staging did not become healthy within 120s"
+      exit 1
+
+track-dora:
+  stage: observe
+  image: alpine:3.20
+  needs:
+    - smoke-test-staging   # only record a deployment if smoke test passed
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   before_script:
@@ -277,11 +317,91 @@ track-dora:
           \"commit_created_at\":\"$CI_COMMIT_TIMESTAMP\"
         }"
 
+# ── SLACK NOTIFICATION ──────────────────────────────────────────────────────
+# Sends a message to Slack after every successful staging deploy.
+# SLACK_WEBHOOK_URL is a GitLab CI variable (masked).
+#
+# Why after_script instead of a separate job?
+#   after_script runs even when the job fails — useful for failure notifications.
+#   We have a separate notify-failure job for that case below.
+notify-deploy:
+  stage: observe
+  image: alpine:3.20
+  needs:
+    - track-dora
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      curl -sf -X POST "$SLACK_WEBHOOK_URL" \
+        -H 'Content-Type: application/json' \
+        -d "{
+          \"text\": \":rocket: *$SERVICE_NAME* deployed to staging\",
+          \"attachments\": [{
+            \"color\": \"good\",
+            \"fields\": [
+              {\"title\": \"Commit\", \"value\": \"<$CI_PROJECT_URL/-/commit/$CI_COMMIT_SHA|$CI_COMMIT_SHORT_SHA>\", \"short\": true},
+              {\"title\": \"Author\", \"value\": \"$CI_COMMIT_AUTHOR\", \"short\": true},
+              {\"title\": \"Message\", \"value\": \"$CI_COMMIT_MESSAGE\", \"short\": false},
+              {\"title\": \"Pipeline\", \"value\": \"<$CI_PIPELINE_URL|#$CI_PIPELINE_ID>\", \"short\": true}
+            ]
+          }]
+        }"
+
+# ── FAILURE NOTIFICATION ────────────────────────────────────────────────────
+# This job runs ONLY when the pipeline fails. Sends a Slack alert.
+#
+# Why a separate job and not after_script on every job?
+#   after_script on individual jobs fires once per job failure — you'd get
+#   spam if three jobs fail. This fires once per pipeline failure.
+notify-failure:
+  stage: observe
+  image: alpine:3.20
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: on_failure
+    - if: '$CI_COMMIT_TAG'
+      when: on_failure
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      curl -sf -X POST "$SLACK_WEBHOOK_URL" \
+        -H 'Content-Type: application/json' \
+        -d "{
+          \"text\": \":fire: *$SERVICE_NAME* pipeline FAILED\",
+          \"attachments\": [{
+            \"color\": \"danger\",
+            \"fields\": [
+              {\"title\": \"Branch\", \"value\": \"$CI_COMMIT_BRANCH\", \"short\": true},
+              {\"title\": \"Commit\", \"value\": \"<$CI_PROJECT_URL/-/commit/$CI_COMMIT_SHA|$CI_COMMIT_SHORT_SHA>\", \"short\": true},
+              {\"title\": \"Pipeline\", \"value\": \"<$CI_PIPELINE_URL|#$CI_PIPELINE_ID>\", \"short\": false}
+            ]
+          }]
+        }"
+
 ai-review:
   stage: agentic
   image: python:3.12-slim
+  # AI review costs API credits per run. For a small team shipping fast,
+  # don't run it on every MR. Only run when sensitive paths are touched.
+  # The team's human reviewers handle the rest.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "**/auth/**"
+        - "**/payment/**"
+        - "**/middleware/**"
+        - "**/Dockerfile"
+        - ".gitlab-ci.yml"
+        - "ci-templates/**"
+        - "charts/**"
+        - "gitops/**"
+        - "policies/**"
+        - "**/go.mod"
+        - "**/go.sum"
   before_script:
     - pip install --quiet anthropic python-gitlab
   script:

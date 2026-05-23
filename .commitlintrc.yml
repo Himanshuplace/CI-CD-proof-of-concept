@@ -1,39 +1,44 @@
+# commitlint config for a 5-person team
+#
+# Philosophy:
+#   - Type IS enforced (feat/fix/chore...). Drives semver bumps and changelog.
+#   - Scope is OPTIONAL. Forcing a scope from a fixed list breaks commits
+#     when you add a new service. Warning if missing — not error.
+#   - Subject length cap at 72 chars (GitHub/GitLab UI truncation point).
+
 extends:
   - '@commitlint/config-conventional'
 
 rules:
+  # Severity scale: 0 = disabled, 1 = warning, 2 = error
+  # Format: [severity, applicability, value]
+
   type-enum:
-    - 2
+    - 2                          # error: commit must use one of these types
     - always
     - [feat, fix, chore, refactor, test, perf, ci, docs, build, revert]
+
+  # Scope is recommended but not enforced.
+  # When you have stable service boundaries, change this to `- 2 - always - [...]`
+  # and list your actual scopes.
   scope-enum:
-    - 2
+    - 1                          # warning only
     - always
-    - [
-        nsdl,
-        cdsl,
-        broker,
-        auth,
-        payment,
-        nats,
-        redis,
-        ws,
-        deps,
-        docker,
-        api,
-        ci,
-        helm,
-        gitops,
-        vault,
-        observability,
-        root
-      ]
+    - []                         # empty = any scope allowed
+
   subject-max-length:
     - 2
     - always
     - 72
+
   subject-full-stop:
     - 2
     - never
     - '.'
 
+  # Body line length (when commit has a body). Soft limit so the body
+  # wraps nicely in `git log` without forcing line breaks mid-thought.
+  body-max-line-length:
+    - 1                          # warning only
+    - always
+    - 100

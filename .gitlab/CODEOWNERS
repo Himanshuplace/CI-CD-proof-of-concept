@@ -1,27 +1,38 @@
-# Default: senior/backend lead reviews everything not matched below.
-*                                      @gnexlayer/senior-engineers
+# CODEOWNERS for a 5-person team
+#
+# Philosophy:
+#   - 1 approver for everything (you're 5 people, not 50 — trust each other)
+#   - Path-based ownership only for genuinely sensitive areas
+#   - Most files don't need explicit ownership: anyone can review
+#
+# Replace @username placeholders below with actual GitLab usernames.
+# Use individual handles, not group handles, for a 5-person team.
 
-# CI/CD and deployment are production-control paths.
-.gitlab-ci.yml                         @gnexlayer/platform-team @gnexlayer/senior-engineers
-ci-templates/                           @gnexlayer/platform-team
-charts/                                 @gnexlayer/platform-team
-gitops/                                 @gnexlayer/platform-team
-**/Dockerfile                           @gnexlayer/platform-team
+# ── Sensitive paths — at least one of the listed people must approve ────────
+# These are paths where a mistake has outsized blast radius.
 
-# Secrets and config ownership.
-**/vault/**                             @gnexlayer/platform-team @gnexlayer/security-team
-**/external-secrets*.yaml               @gnexlayer/platform-team @gnexlayer/security-team
+# CI/CD pipeline changes — anyone who works on the pipeline can review,
+# but a second person should at least see the diff.
+.gitlab-ci.yml                @devops-1 @devops-2
+ci-templates/                 @devops-1 @devops-2
+charts/                       @devops-1 @devops-2
+gitops/                       @devops-1 @devops-2
+**/Dockerfile                 @devops-1 @devops-2
 
-# Financial and external-facing domains.
-**/payment/**                           @gnexlayer/payments-team @gnexlayer/security-team
-**/auth/**                              @gnexlayer/auth-team @gnexlayer/security-team
-**/middleware/**                        @gnexlayer/auth-team
-**/nsdl/**                              @gnexlayer/depository-team
-**/cdsl/**                              @gnexlayer/depository-team
-**/depository/**                        @gnexlayer/depository-team
+# Auth and payment — financial regulator will ask "who signed off on this".
+# CODEOWNERS gives you that audit trail automatically.
+**/auth/**                    @senior-engineer-1
+**/payment/**                 @senior-engineer-1
 
-# Supply chain sensitive files.
-**/go.mod                               @gnexlayer/senior-engineers
-**/go.sum                               @gnexlayer/senior-engineers
-renovate.json                           @gnexlayer/platform-team
+# Supply chain — dependency changes can pull in compromised packages.
+**/go.mod                     @devops-1 @devops-2
+**/go.sum                     @devops-1 @devops-2
+renovate.json                 @devops-1 @devops-2
 
+# Vault/secrets config — second pair of eyes mandatory for blast radius.
+**/vault/**                   @devops-1 @devops-2
+**/external-secrets*.yaml     @devops-1 @devops-2
+
+# Everything else: any team member can review.
+# (No catch-all "* @everyone" line — that would force a review on every MR
+#  even for one-line typo fixes, which kills velocity at multi-deploy/day cadence.)

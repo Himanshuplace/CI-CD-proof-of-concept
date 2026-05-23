@@ -1,0 +1,47 @@
+// user.proto — the contract definition for the UserService.
+//
+// This file is the SOURCE OF TRUTH for the gRPC API.
+// In a real project, you run:
+//
+//   protoc --go_out=. --go-grpc_out=. proto/user.proto
+//
+// That generates:
+//   proto/user.pb.go       — message structs (GetUserRequest, UserResponse, etc.)
+//   proto/user_grpc.pb.go  — server and client interfaces
+//
+// For this demo we hand-write those types in handler/grpc.go
+// so you can run the service without installing protoc.
+// The generated code and hand-written code are functionally identical.
+
+syntax = "proto3";
+
+package user.v1;
+
+option go_package = "github.com/gnexlayer/demo-service/proto/user/v1;userv1";
+
+// UserService exposes user data over gRPC.
+// Clients: other Go microservices, grpcurl for debugging.
+service UserService {
+  rpc GetUser    (GetUserRequest)    returns (UserResponse);
+  rpc ListUsers  (ListUsersRequest)  returns (ListUsersResponse);
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+message ListUsersRequest {
+  int32 limit  = 1;
+  int32 offset = 2;
+}
+
+message UserResponse {
+  string id    = 1;
+  string name  = 2;
+  string email = 3;
+}
+
+message ListUsersResponse {
+  repeated UserResponse users = 1;
+  int32                 total = 2;
+}
