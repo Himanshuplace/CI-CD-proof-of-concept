@@ -8,9 +8,28 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Font stack:
+       Fraunces        - display headers (italic by default, editorial feel)
+       Source Serif 4  - body / reading text (designed for long-form on screens)
+       Inter           - UI labels, topbar, table headers
+       JetBrains Mono  - code blocks
+  -->
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,300..700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="assets/css/styles.css" />
+
+  <!-- Apply saved theme BEFORE first paint to avoid flash of wrong theme.
+       Reads from localStorage; falls back to system preference. -->
+  <script>
+    (function() {
+      try {
+        const saved = localStorage.getItem('theme');
+        if (saved && ['light','sepia','dark'].includes(saved)) {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (e) { /* localStorage blocked — fall through to system pref */ }
+    })();
+  </script>
 </head>
 <body>
 
@@ -21,7 +40,31 @@
   <header class="topbar">
     <div class="topbar-inner">
       <div class="topbar-title">The <b>CI/CD</b> Field Manual</div>
-      <div class="topbar-meta">v1 · May 2026</div>
+      <div class="topbar-right">
+        <div class="theme-switch" role="group" aria-label="Theme">
+          <!-- Light · sun icon -->
+          <button data-theme-set="light" aria-label="Light theme" title="Light">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+          </button>
+          <!-- Sepia · book icon -->
+          <button data-theme-set="sepia" aria-label="Sepia / reading theme" title="Sepia">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+          </button>
+          <!-- Dark · moon icon -->
+          <button data-theme-set="dark" aria-label="Dark theme" title="Dark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="topbar-meta">v1 · May 2026</div>
+      </div>
     </div>
   </header>
 
@@ -1876,12 +1919,14 @@
          ╚══════════════════════════════════════════════════════════════ -->
     <footer class="colophon reading">
       <p>
-        Set in <i>Fraunces</i> (display) and <i>Inter</i> (body). Code in <i>JetBrains Mono</i>.
-        All diagrams rendered as inline SVG. No JavaScript framework, no build step.
-        The whole site is one HTML file with small companion CSS and JS.
+        Set in <i>Fraunces</i> for display headers, <i>Source Serif 4</i> for body —
+        a typeface designed specifically for long-form digital reading.
+        Code in <i>JetBrains Mono</i>. All diagrams rendered as inline SVG.
+        No JavaScript framework, no build step. The whole site is one HTML file
+        with small companion CSS and JS.
       </p>
       <p class="small">
-        Open <code>website/index.html</code> in any browser · Press <kbd>1</kbd>–<kbd>8</kbd> to jump pipeline stages
+        Press <kbd>T</kbd> to cycle themes · <kbd>1</kbd>–<kbd>8</kbd> to jump pipeline stages
       </p>
     </footer>
 

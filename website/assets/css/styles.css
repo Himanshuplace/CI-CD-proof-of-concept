@@ -1,29 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   The CI/CD Field Manual — design system
-
-   Visual language: editorial / technical book.
-   Colour: warm cream paper, deep ink, burnt amber accent.
-   Type: serif display (Fraunces), humanist sans (Inter), mono (JetBrains).
-   Layout: single column reading width with margin annotations.
+   The CI/CD Field Manual — design system v2
+   Three themes (light, sepia, dark), Source Serif 4 for reading body.
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── Reset + base ─────────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* ── Theme tokens (LIGHT — default) ───────────────────────────────────── */
 :root {
-  /* warm paper palette — not slate, not pure white */
   --paper:        #F6F1E7;
   --paper-deep:   #EFE7D6;
   --paper-line:   #E2D7BE;
+  --paper-surf:   #FCFAF4;
   --ink:          #1A1814;
   --ink-soft:     #4A463E;
   --ink-faded:    #8A8478;
 
-  /* accents — burnt amber, ink-blue, oxblood */
   --amber:        #B7501C;
   --amber-soft:   #D88A4F;
   --amber-wash:   #F4E5D5;
@@ -33,14 +28,90 @@
   --moss:         #4A6741;
   --teal:         #1F5959;
 
-  /* type scale */
-  --serif: 'Fraunces', 'Newsreader', Georgia, serif;
-  --sans:  'Inter', system-ui, -apple-system, sans-serif;
-  --mono:  'JetBrains Mono', 'Iosevka', Consolas, monospace;
+  --code-bg:      #1A1814;
+  --code-text:    #E8DFD0;
+  --selection-bg: var(--amber);
+  --selection-fg: white;
 
-  /* spacing */
-  --col: min(680px, calc(100vw - 48px));
+  --grid-dot:     rgba(184, 168, 130, 0.04);
+
+  /* type scale */
+  --serif:   'Fraunces', Georgia, serif;
+  --reading: 'Source Serif 4', 'Source Serif Pro', Charter, Georgia, serif;
+  --sans:    'Inter', system-ui, -apple-system, sans-serif;
+  --mono:    'JetBrains Mono', 'Iosevka', Consolas, monospace;
 }
+
+/* ── SEPIA — easy on the eyes for long reading ───────────────────────── */
+[data-theme="sepia"] {
+  --paper:        #F1E2BF;
+  --paper-deep:   #E8D3A6;
+  --paper-line:   #D4BC8A;
+  --paper-surf:   #F6E8C7;
+  --ink:          #3A2A18;
+  --ink-soft:     #5A4628;
+  --ink-faded:    #8A7350;
+
+  --amber:        #9A3F0F;
+  --amber-soft:   #C56B30;
+  --amber-wash:   #E8C896;
+  --indigo:       #1F3060;
+  --oxblood:      #6A1820;
+  --moss:         #3A5530;
+  --teal:         #144848;
+
+  --code-bg:      #2A2010;
+  --code-text:    #E8D3A0;
+  --grid-dot:     rgba(120, 95, 50, 0.06);
+}
+
+/* ── DARK — warm dark, not cold slate ────────────────────────────────── */
+[data-theme="dark"] {
+  --paper:        #15120E;
+  --paper-deep:   #1F1B16;
+  --paper-line:   #3A352D;
+  --paper-surf:   #211D17;
+  --ink:          #E8DFD0;
+  --ink-soft:     #B8B0A2;
+  --ink-faded:    #7A746A;
+
+  --amber:        #E89455;
+  --amber-soft:   #F0AD7A;
+  --amber-wash:   #3A2A1C;
+  --indigo:       #8DA5D8;
+  --oxblood:      #D88080;
+  --moss:         #95B080;
+  --teal:         #6FB0B0;
+
+  --code-bg:      #0A0907;
+  --code-text:    #D8CFC0;
+  --grid-dot:     rgba(180, 165, 130, 0.05);
+}
+
+/* respect system preference on first load (overridden by JS once user chooses) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --paper:        #15120E;
+    --paper-deep:   #1F1B16;
+    --paper-line:   #3A352D;
+    --paper-surf:   #211D17;
+    --ink:          #E8DFD0;
+    --ink-soft:     #B8B0A2;
+    --ink-faded:    #7A746A;
+    --amber:        #E89455;
+    --amber-soft:   #F0AD7A;
+    --amber-wash:   #3A2A1C;
+    --indigo:       #8DA5D8;
+    --oxblood:      #D88080;
+    --moss:         #95B080;
+    --teal:         #6FB0B0;
+    --code-bg:      #0A0907;
+    --code-text:    #D8CFC0;
+    --grid-dot:     rgba(180, 165, 130, 0.05);
+  }
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
 
 html {
   scroll-behavior: smooth;
@@ -50,50 +121,49 @@ html {
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--sans);
-  font-size: 17px;
+  font-family: var(--reading);
+  font-size: 18px;
   line-height: 1.7;
-  font-feature-settings: 'ss01', 'cv11';
+  font-feature-settings: 'kern', 'liga', 'onum';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-image:
-    repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(184, 168, 130, 0.04) 39px, rgba(184, 168, 130, 0.04) 40px);
+    repeating-linear-gradient(0deg, transparent 0, transparent 39px,
+      var(--grid-dot) 39px, var(--grid-dot) 40px);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /* ── Typography ───────────────────────────────────────────────────────── */
 
-.display {
+.display, h1 {
   font-family: var(--serif);
   font-weight: 400;
   font-style: italic;
   letter-spacing: -0.02em;
-  line-height: 1.05;
+  line-height: 1.0;
   font-feature-settings: 'ss01';
 }
 
-.serif {
-  font-family: var(--serif);
-  font-weight: 400;
-  letter-spacing: -0.01em;
-}
-
-h1, h2, h3 {
+h2, h3 {
   font-family: var(--serif);
   font-weight: 500;
   letter-spacing: -0.015em;
   color: var(--ink);
 }
 
-h1 { font-size: clamp(48px, 8vw, 96px); line-height: 1.0; }
+h1 { font-size: clamp(48px, 8vw, 96px); }
 h2 { font-size: clamp(36px, 5vw, 56px); line-height: 1.1; margin-top: 1.5em; }
-h3 { font-size: 24px; line-height: 1.3; margin-top: 1.5em; }
+h3 { font-size: 26px; line-height: 1.3; margin-top: 1.5em; }
+h4 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 22px; line-height: 1.2; }
 
 p {
-  font-size: 17px;
+  font-family: var(--reading);
+  font-size: 18px;
   line-height: 1.75;
   color: var(--ink-soft);
   margin: 1em 0;
-  max-width: 65ch;
+  max-width: 64ch;
+  font-feature-settings: 'kern', 'liga', 'onum';
 }
 
 p strong, p b {
@@ -103,7 +173,7 @@ p strong, p b {
 
 code, kbd {
   font-family: var(--mono);
-  font-size: 0.88em;
+  font-size: 0.82em;
   background: var(--paper-deep);
   padding: 1px 6px;
   border-radius: 3px;
@@ -116,7 +186,7 @@ a {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
-  text-decoration-color: rgba(183, 80, 28, 0.4);
+  text-decoration-color: color-mix(in srgb, var(--amber) 40%, transparent);
   transition: text-decoration-color 0.15s;
 }
 a:hover { text-decoration-color: var(--amber); }
@@ -157,18 +227,19 @@ a:hover { text-decoration-color: var(--amber); }
 .topbar {
   position: sticky;
   top: 0;
-  background: rgba(246, 241, 231, 0.93);
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--paper-line);
   z-index: 50;
-  padding: 14px 32px;
+  padding: 12px 32px;
+  transition: background-color 0.25s ease;
 }
 .topbar-inner {
   max-width: 1100px;
   margin: 0 auto;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
 }
@@ -179,12 +250,52 @@ a:hover { text-decoration-color: var(--amber); }
   color: var(--ink);
 }
 .topbar-title b { font-weight: 600; font-style: normal; }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
 .topbar-meta {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--ink-faded);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+/* ── Theme switcher (3 icons) ─────────────────────────────────────────── */
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--paper-line);
+  border-radius: 999px;
+  padding: 3px;
+  background: var(--paper-surf);
+}
+.theme-switch button {
+  background: transparent;
+  border: none;
+  padding: 5px 8px;
+  cursor: pointer;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-faded);
+  transition: all 0.15s ease;
+}
+.theme-switch button:hover {
+  color: var(--ink);
+  background: var(--paper-deep);
+}
+.theme-switch button.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+.theme-switch button svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 /* ── Hero ─────────────────────────────────────────────────────────────── */
@@ -211,7 +322,7 @@ a:hover { text-decoration-color: var(--amber); }
 }
 .hero .sub {
   margin-top: 28px;
-  font-family: var(--serif);
+  font-family: var(--reading);
   font-style: italic;
   font-weight: 400;
   font-size: clamp(22px, 3vw, 30px);
@@ -236,7 +347,7 @@ a:hover { text-decoration-color: var(--amber); }
   color: var(--ink-faded);
   margin-bottom: 4px;
 }
-.hero .meta dd { color: var(--ink); font-weight: 500; }
+.hero .meta dd { color: var(--ink); font-family: var(--reading); font-weight: 500; }
 
 /* ── Table of contents ────────────────────────────────────────────────── */
 
@@ -321,7 +432,7 @@ a:hover { text-decoration-color: var(--amber); }
   font-size: clamp(40px, 6vw, 64px);
 }
 .chapter .dek {
-  font-family: var(--serif);
+  font-family: var(--reading);
   font-style: italic;
   font-size: 22px;
   line-height: 1.5;
@@ -352,10 +463,11 @@ a:hover { text-decoration-color: var(--amber); }
 figure.diagram {
   margin: 64px -32px;
   padding: 40px 32px 32px;
-  background: #FCFAF4;
+  background: var(--paper-surf);
   border-top: 1px solid var(--paper-line);
   border-bottom: 1px solid var(--paper-line);
   position: relative;
+  transition: background-color 0.25s ease;
 }
 figure.diagram.bare {
   background: transparent;
@@ -385,17 +497,77 @@ figure.diagram figcaption {
   margin-top: 24px;
   padding-top: 18px;
   border-top: 1px solid var(--paper-line);
-  font-family: var(--serif);
+  font-family: var(--reading);
   font-style: italic;
-  font-size: 15px;
+  font-size: 16px;
   color: var(--ink-soft);
-  line-height: 1.6;
+  line-height: 1.65;
   max-width: 760px;
 }
 
 @media (min-width: 900px) {
   figure.diagram { margin: 80px -48px; padding: 48px; }
 }
+
+/* ── SVG theme adaptation ─────────────────────────────────────────────── */
+/* The diagrams were hand-built with light-mode hex values. For dark and
+   sepia themes, we override the most common stroke/fill colours via CSS
+   attribute selectors. SVG presentation attributes are overridden by
+   matching CSS rules, so this works without touching the HTML. */
+
+/* ── DARK mode SVG overrides ──────────────────────────────────────────── */
+[data-theme="dark"] svg rect[fill="white"]      { fill: #211D17; }
+[data-theme="dark"] svg rect[fill="#FCFAF4"]    { fill: #2A2520; }
+[data-theme="dark"] svg rect[fill="#F4E5D5"]    { fill: #3A2C1E; }
+[data-theme="dark"] svg rect[fill="#F0E3D5"]    { fill: #2C241A; }
+[data-theme="dark"] svg rect[fill="#EAE4D2"]    { fill: #1F1B14; }
+[data-theme="dark"] svg ellipse[fill="white"]   { fill: #211D17; }
+[data-theme="dark"] svg path[fill="white"]      { fill: #211D17; }
+[data-theme="dark"] svg path[fill="#F4E5D5"]    { fill: #3A2C1E; }
+[data-theme="dark"] svg circle[fill="white"]    { fill: #211D17; }
+
+[data-theme="dark"] svg text[fill="#1A1814"]    { fill: #E8DFD0; }
+[data-theme="dark"] svg text[fill="#4A463E"]    { fill: #B8B0A2; }
+[data-theme="dark"] svg text[fill="#8A8478"]    { fill: #8A8478; }
+
+[data-theme="dark"] svg line[stroke="#1A1814"]  { stroke: #E8DFD0; }
+[data-theme="dark"] svg line[stroke="#E2D7BE"]  { stroke: #3A352D; }
+[data-theme="dark"] svg path[stroke="#1A1814"]  { stroke: #E8DFD0; }
+[data-theme="dark"] svg circle[fill="#1A1814"]  { fill: #E8DFD0; }
+[data-theme="dark"] svg circle[fill="#1A1814"] + text[fill="white"] { fill: #15120E; }
+[data-theme="dark"] svg rect[fill="#1A1814"]    { fill: #E8DFD0; }
+[data-theme="dark"] svg rect[fill="#1A1814"] ~ text[fill="white"] { fill: #15120E; }
+
+[data-theme="dark"] svg marker path[fill="#1A1814"] { fill: #E8DFD0; }
+[data-theme="dark"] svg marker path[fill="#8A8478"] { fill: #8A8478; }
+
+/* slight brighten on the accent colours so they stay legible on dark */
+[data-theme="dark"] svg text[fill="#B7501C"]    { fill: #E89455; }
+[data-theme="dark"] svg rect[stroke="#B7501C"]  { stroke: #E89455; }
+[data-theme="dark"] svg path[stroke="#B7501C"]  { stroke: #E89455; }
+[data-theme="dark"] svg circle[stroke="#B7501C"]{ stroke: #E89455; }
+[data-theme="dark"] svg text[fill="#2A3F6F"]    { fill: #8DA5D8; }
+[data-theme="dark"] svg rect[stroke="#2A3F6F"]  { stroke: #8DA5D8; }
+[data-theme="dark"] svg text[fill="#7A2532"]    { fill: #D88080; }
+[data-theme="dark"] svg rect[stroke="#7A2532"]  { stroke: #D88080; }
+[data-theme="dark"] svg text[fill="#4A6741"]    { fill: #95B080; }
+[data-theme="dark"] svg rect[stroke="#4A6741"]  { stroke: #95B080; }
+[data-theme="dark"] svg text[fill="#1F5959"]    { fill: #6FB0B0; }
+[data-theme="dark"] svg rect[stroke="#1F5959"]  { stroke: #6FB0B0; }
+[data-theme="dark"] svg path[stroke="#1F5959"]  { stroke: #6FB0B0; }
+[data-theme="dark"] svg text[fill="#1F5959"]    { fill: #6FB0B0; }
+
+/* ── SEPIA mode SVG overrides (small adjustments) ─────────────────────── */
+[data-theme="sepia"] svg rect[fill="white"]    { fill: #F6E8C7; }
+[data-theme="sepia"] svg rect[fill="#FCFAF4"]  { fill: #F6E8C7; }
+[data-theme="sepia"] svg path[fill="white"]    { fill: #F6E8C7; }
+[data-theme="sepia"] svg ellipse[fill="white"] { fill: #F6E8C7; }
+[data-theme="sepia"] svg text[fill="#1A1814"]  { fill: #3A2A18; }
+[data-theme="sepia"] svg text[fill="#4A463E"]  { fill: #5A4628; }
+[data-theme="sepia"] svg line[stroke="#1A1814"]{ stroke: #3A2A18; }
+[data-theme="sepia"] svg path[stroke="#1A1814"]{ stroke: #3A2A18; }
+[data-theme="sepia"] svg rect[fill="#1A1814"]  { fill: #3A2A18; }
+[data-theme="sepia"] svg circle[fill="#1A1814"]{ fill: #3A2A18; }
 
 /* ── Margin notes (asides) ────────────────────────────────────────────── */
 
@@ -405,9 +577,9 @@ figure.diagram figcaption {
   padding: 18px 22px;
   background: var(--paper-deep);
   border-left: 3px solid var(--amber);
-  font-family: var(--serif);
+  font-family: var(--reading);
   font-style: italic;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.55;
   color: var(--ink);
 }
@@ -433,7 +605,7 @@ figure.diagram figcaption {
   padding: 0 0 0 28px;
   font-family: var(--serif);
   font-style: italic;
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.3;
   color: var(--ink);
   border-left: 3px solid var(--amber);
@@ -442,8 +614,8 @@ figure.diagram figcaption {
 
 /* ── Code blocks ──────────────────────────────────────────────────────── */
 pre {
-  background: var(--ink);
-  color: #E8DFD0;
+  background: var(--code-bg);
+  color: var(--code-text);
   padding: 22px 24px;
   border-radius: 2px;
   overflow-x: auto;
@@ -452,6 +624,7 @@ pre {
   line-height: 1.65;
   margin: 28px 0;
   border-left: 3px solid var(--amber);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 pre code {
   background: transparent;
@@ -473,6 +646,7 @@ table {
   border-collapse: collapse;
   margin: 32px 0;
   font-size: 15px;
+  font-family: var(--reading);
 }
 thead th {
   text-align: left;
@@ -502,10 +676,11 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   background: var(--ink);
   padding: 4px;
   border-radius: 2px;
+  transition: background-color 0.25s ease;
 }
 .stage-tile {
-  background: #2A2620;
-  color: #B8AFA0;
+  background: color-mix(in srgb, var(--ink) 78%, var(--paper) 22%);
+  color: var(--paper-deep);
   border: none;
   padding: 18px 8px;
   font-family: var(--mono);
@@ -530,9 +705,9 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   display: block;
   font-size: 11px;
   letter-spacing: 0.1em;
-  color: #E8DFD0;
+  color: var(--code-text);
 }
-.stage-tile:hover { background: #3A3530; }
+.stage-tile:hover { background: color-mix(in srgb, var(--ink) 65%, var(--paper) 35%); }
 .stage-tile.active {
   background: var(--amber);
   color: white;
@@ -577,7 +752,12 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   margin-bottom: 4px;
   font-weight: 400;
 }
-.job-desc { color: var(--ink-soft); font-size: 15px; line-height: 1.65; }
+.job-desc {
+  color: var(--ink-soft);
+  font-size: 16px;
+  line-height: 1.65;
+  font-family: var(--reading);
+}
 .job-desc strong { color: var(--ink); font-weight: 600; }
 
 @media (max-width: 700px) {
@@ -598,7 +778,7 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   padding: 28px;
   border-right: 1px solid var(--paper-line);
   border-bottom: 1px solid var(--paper-line);
-  background: #FCFAF4;
+  background: var(--paper-surf);
 }
 .card-row .label {
   font-family: var(--mono);
@@ -618,7 +798,8 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   color: var(--ink);
 }
 .card-row p {
-  font-size: 14px;
+  font-family: var(--reading);
+  font-size: 15px;
   margin: 0;
   line-height: 1.6;
 }
@@ -655,12 +836,14 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   margin-bottom: 6px;
   color: var(--ink);
 }
-.numbered > li p { margin: 8px 0; font-size: 15px; }
+.numbered > li p { margin: 8px 0; font-size: 16px; }
 
 /* ── Migration timeline ───────────────────────────────────────────────── */
 .timeline {
   margin: 48px 0;
   position: relative;
+  list-style: none;
+  padding: 0;
 }
 .timeline::before {
   content: "";
@@ -704,7 +887,12 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   margin: 4px 0 10px;
   color: var(--ink);
 }
-.tl-item p { margin: 0; font-size: 15px; max-width: 600px; }
+.tl-item p {
+  font-family: var(--reading);
+  margin: 0;
+  font-size: 16px;
+  max-width: 600px;
+}
 .tl-item .status {
   display: inline-block;
   margin-top: 10px;
@@ -723,7 +911,7 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   margin-top: 120px;
   padding: 60px 0 80px;
   border-top: 2px solid var(--ink);
-  font-family: var(--serif);
+  font-family: var(--reading);
   font-style: italic;
   font-size: 16px;
   color: var(--ink-soft);
@@ -745,7 +933,6 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Diagram reveal on scroll */
 .reveal {
   opacity: 0;
   transform: translateY(20px);
@@ -756,17 +943,10 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
   transform: translateY(0);
 }
 
-/* SVG element reveals (sequence) */
-.svg-step {
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-.svg-step.in { opacity: 1; }
-
 /* ── Selection ────────────────────────────────────────────────────────── */
 ::selection {
-  background: var(--amber);
-  color: white;
+  background: var(--selection-bg);
+  color: var(--selection-fg);
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────── */
@@ -777,8 +957,8 @@ tbody td:first-child { color: var(--ink); font-weight: 500; }
 
 /* ── Print ────────────────────────────────────────────────────────────── */
 @media print {
-  body { background: white; }
-  .topbar, .progress { display: none; }
+  body { background: white; color: black; }
+  .topbar, .progress, .theme-switch { display: none; }
   .stage-panel.hidden { display: block !important; }
   pre { border: 1px solid #ccc; background: #f5f5f5; color: black; }
   pre .code-token-cmt { color: #666; }

@@ -1,19 +1,86 @@
 // ═══════════════════════════════════════════════════════════════════════
 //  main.js — interactivity for the CI/CD Field Manual
 //
-//  Four responsibilities:
-//   1. Reading progress bar (top of page)
-//   2. Pipeline stage tabs (click + keyboard shortcuts)
-//   3. Scroll-triggered diagram reveals
-//   4. Smooth anchor navigation
+//  Five responsibilities:
+//   1. Theme switcher (light / sepia / dark) with localStorage + system pref
+//   2. Reading progress bar (top of page)
+//   3. Pipeline stage tabs (click + keyboard shortcuts)
+//   4. Scroll-triggered figure reveals
+//   5. Smooth anchor navigation (topbar-aware)
 //
 //  Plain ES6, no framework, no build step.
+//  Theme application happens in an inline <script> in <head> BEFORE first
+//  paint to avoid the flash-of-wrong-theme on load. This file owns the
+//  rest of the theme lifecycle: button clicks, syncing the UI, persisting.
 // ═══════════════════════════════════════════════════════════════════════
 
 (function () {
   'use strict';
 
-  // ── 1. Reading progress bar ──────────────────────────────────────────
+  // ── 1. Theme switcher ────────────────────────────────────────────────
+
+  const THEMES = ['light', 'sepia', 'dark'];
+  const themeButtons = document.querySelectorAll('.theme-switch button[data-theme-set]');
+
+  function currentTheme() {
+    // Explicit theme on <html> wins. Otherwise consult system preference.
+    const explicit = document.documentElement.getAttribute('data-theme');
+    if (THEMES.includes(explicit)) return explicit;
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  }
+
+  function applyTheme(theme) {
+    if (!THEMES.includes(theme)) return;
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('theme', theme); } catch (e) { /* private mode */ }
+    syncThemeButtons(theme);
+  }
+
+  function syncThemeButtons(active) {
+    themeButtons.forEach((btn) => {
+      const isActive = btn.getAttribute('data-theme-set') === active;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  }
+
+  themeButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      applyTheme(btn.getAttribute('data-theme-set'));
+    });
+  });
+
+  // Initial sync — reflect whatever theme is active right now
+  syncThemeButtons(currentTheme());
+
+  // If the user hasn't explicitly chosen, follow system changes live
+  if (window.matchMedia) {
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    mql.addEventListener?.('change', (e) => {
+      const userChose = (() => { try { return !!localStorage.getItem('theme'); } catch { return false; } })();
+      if (userChose) return; // user override wins
+      document.documentElement.removeAttribute('data-theme');
+      syncThemeButtons(e.matches ? 'dark' : 'light');
+    });
+  }
+
+  // Keyboard shortcut: T cycles themes
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    if (e.key === 't' || e.key === 'T') {
+      const idx = THEMES.indexOf(currentTheme());
+      const next = THEMES[(idx + 1) % THEMES.length];
+      applyTheme(next);
+    }
+  });
+
+  // ── 2. Reading progress bar ──────────────────────────────────────────
   const progressEl = document.getElementById('progress');
 
   function updateProgress() {
@@ -25,7 +92,6 @@
     if (progressEl) progressEl.style.width = percent + '%';
   }
 
-  // rAF-throttled scroll listener: avoids hammering layout on every pixel
   let rafScheduled = false;
   window.addEventListener('scroll', () => {
     if (rafScheduled) return;
@@ -37,93 +103,77 @@
   }, { passive: true });
   updateProgress();
 
-  // ── 2. Pipeline stage tabs ───────────────────────────────────────────
+  // ── 3. Pipeline stage tabs ───────────────────────────────────────────
   const stageButtons = document.querySelectorAll('.stage-tile');
   const stagePanels = document.querySelectorAll('.stage-panel');
 
   function showStage(stageName) {
-    stagePanels.forEach((panel) => {
-      panel.classList.add('hidden');
-    });
+    stagePanels.forEach((panel) => panel.classList.add('hidden'));
     stageButtons.forEach((btn) => btn.classList.remove('active'));
 
-    const targetPanel = document.getElementById('panel-' + stageName);
-    if (targetPanel) targetPanel.classList.remove('hidden');
+    const panel = document.getElementById('panel-' + stageName);
+    if (panel) panel.classList.remove('hidden');
 
-    const targetBtn = document.querySelector('.stage-tile[data-stage="' + stageName + '"]');
-    if (targetBtn) targetBtn.classList.add('active');
+    const btn = document.querySelector('.stage-tile[data-stage="' + stageName + '"]');
+    if (btn) btn.classList.add('active');
   }
 
   stageButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
-      const stage = btn.getAttribute('data-stage');
-      showStage(stage);
+      showStage(btn.getAttribute('data-stage'));
     });
   });
 
-  // Keyboard shortcuts 1-8 for pipeline stages
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const tag = document.activeElement.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
     const stageMap = {
-      '1': 'validate',
-      '2': 'test',
-      '3': 'security',
-      '4': 'build',
-      '5': 'package',
-      '6': 'deploy',
-      '7': 'observe',
-      '8': 'agentic',
+      '1': 'validate', '2': 'test', '3': 'security', '4': 'build',
+      '5': 'package',  '6': 'deploy', '7': 'observe', '8': 'agentic',
     };
 
     if (stageMap[e.key]) {
       e.preventDefault();
       showStage(stageMap[e.key]);
-
-      const pipelineSection = document.getElementById('ch3');
-      if (pipelineSection) {
-        const rect = pipelineSection.getBoundingClientRect();
-        const isInView = rect.top >= 0 && rect.bottom <= window.innerHeight + 200;
-        if (!isInView) {
-          // jump to the pipeline rail rather than the chapter top
-          const rail = document.querySelector('.pipeline-rail');
-          if (rail) rail.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+      const rail = document.querySelector('.pipeline-rail');
+      if (rail) {
+        const rect = rail.getBoundingClientRect();
+        const inView = rect.top >= 0 && rect.bottom <= window.innerHeight + 200;
+        if (!inView) rail.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
   });
 
-  // ── 3. Scroll-triggered reveals ──────────────────────────────────────
-  // Figures fade in as they enter the viewport. Subtle — doesn't fight
-  // with the reading flow, just adds a sense that the page is alive.
-  const revealEls = document.querySelectorAll('figure.diagram, .pullquote, .tl-item, .card-row > div, .numbered > li');
+  const initialStage =
+    document.querySelector('.stage-tile.active')?.getAttribute('data-stage') || 'validate';
+  showStage(initialStage);
 
-  // Add the .reveal class via JS so users without JS still see content normally
+  // ── 4. Scroll-triggered reveals ──────────────────────────────────────
+  const revealEls = document.querySelectorAll(
+    'figure.diagram, .pullquote, .tl-item, .card-row > div, .numbered > li'
+  );
   revealEls.forEach((el) => el.classList.add('reveal'));
 
   if ('IntersectionObserver' in window) {
-    const revealObs = new IntersectionObserver(
+    const obs = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add('in');
-            revealObs.unobserve(entry.target);
+            obs.unobserve(entry.target);
           }
         });
       },
       { rootMargin: '0px 0px -80px 0px', threshold: 0.05 }
     );
-    revealEls.forEach((el) => revealObs.observe(el));
+    revealEls.forEach((el) => obs.observe(el));
   } else {
-    // No IntersectionObserver → show everything immediately
     revealEls.forEach((el) => el.classList.add('in'));
   }
 
-  // ── 4. Smooth anchor navigation ──────────────────────────────────────
-  // Browser default already does this with CSS scroll-behavior, but adding
-  // a tiny offset for the sticky topbar makes the result feel cleaner.
+  // ── 5. Smooth anchor nav with topbar offset ──────────────────────────
   document.querySelectorAll('a[href^="#"]').forEach((link) => {
     link.addEventListener('click', (e) => {
       const href = link.getAttribute('href');
@@ -131,19 +181,10 @@
       const target = document.querySelector(href);
       if (!target) return;
       e.preventDefault();
-
-      const topbarHeight = document.querySelector('.topbar')?.offsetHeight || 0;
-      const y = target.getBoundingClientRect().top + window.pageYOffset - topbarHeight - 16;
+      const topbarH = document.querySelector('.topbar')?.offsetHeight || 0;
+      const y = target.getBoundingClientRect().top + window.pageYOffset - topbarH - 16;
       window.scrollTo({ top: y, behavior: 'smooth' });
-      // Update the hash without re-triggering scroll
       history.pushState(null, '', href);
     });
   });
-
-  // ── 5. Default open stage on load ────────────────────────────────────
-  // The HTML already marks "validate" as .active in the rail, but we
-  // also make sure the panel state matches in case the HTML drifts.
-  const initialStage = document.querySelector('.stage-tile.active')?.getAttribute('data-stage') || 'validate';
-  showStage(initialStage);
-
 })();
